@@ -1,116 +1,91 @@
-# 🌾 PadiBot — Smart Rice Planter
+﻿# 🌾 PadiBot — Smart Rice Planter
 
-> **Sistem & Aplikasi Mobile Pengendali Mesin Tanam Padi Otomatis Berbasis Android, Web, & Arduino Controller**
+> Aplikasi Android untuk kontrol mesin tanam padi otomatis berbasis Arduino
 
-[![Status](https://img.shields.io/badge/Status-Active%20MVP-success)](https://github.com/adimaryanto-stack/Padi-Bot)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web-green)](https://expo.dev)
+[![Status](https://img.shields.io/badge/Status-Planning%20Phase-yellow)](https://github.com/adimaryanto-stack/Padi-Bot)
+[![Platform](https://img.shields.io/badge/Platform-Android%208.0+-green)](https://expo.dev)
 [![Framework](https://img.shields.io/badge/Framework-React%20Native%20%2B%20Expo-blue)](https://expo.dev)
-[![Hardware](https://img.shields.io/badge/Hardware-Arduino%20%7C%20ESP32-teal)](https://www.arduino.cc)
+[![Hardware](https://img.shields.io/badge/Hardware-Arduino-teal)](https://www.arduino.cc)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
-
----
-
-## 📸 Konsep & Alur Kerja Sistem
-
-<div align="center">
-  <img src="docs/screenshots/concept-banner.webp" alt="PadiBot System Concept" width="100%" />
-</div>
-
----
-
-## 📱 Tampilan Antarmuka Aplikasi (Live Mobile Screenshots)
-
-<div align="center">
-  <table>
-    <tr>
-      <td align="center" width="25%">
-        <b>1. Dashboard (Beranda)</b><br/>
-        <img src="docs/screenshots/dashboard.png" alt="Dashboard Screen" width="100%" style="border-radius: 12px;" />
-      </td>
-      <td align="center" width="25%">
-        <b>2. Pengaturan Tanam</b><br/>
-        <img src="docs/screenshots/planting-settings.png" alt="Planting Settings Screen" width="100%" style="border-radius: 12px;" />
-      </td>
-      <td align="center" width="25%">
-        <b>3. Preview Jalur Otomatis</b><br/>
-        <img src="docs/screenshots/route-preview.png" alt="Route Preview Screen" width="100%" style="border-radius: 12px;" />
-      </td>
-      <td align="center" width="25%">
-        <b>4. Kontrol Manual D-Pad</b><br/>
-        <img src="docs/screenshots/manual-control.png" alt="Manual Control Screen" width="100%" style="border-radius: 12px;" />
-      </td>
-    </tr>
-    <tr>
-      <td align="center">
-        <small>Monitoring status traktor, telemetri live, baterai, GPS RTK, dan pemilih petak sawah aktif.</small>
-      </td>
-      <td align="center">
-        <small>Pilihan 4 pola rute (Boustrophedon, Headland, Spiral In/Out) + diagram alur visual dinamis.</small>
-      </td>
-      <td align="center">
-        <small>Visualisasi peta vektor jalur tanam presisi tinggi dengan area putar headland kuning.</small>
-      </td>
-      <td align="center">
-        <small>Tombol D-Pad manual interaktif untuk manuver traktor secara langsung + berhenti darurat.</small>
-      </td>
-    </tr>
-  </table>
-</div>
 
 ---
 
 ## 📋 Deskripsi
 
-**PadiBot** adalah solusi presisi pertanian modern untuk membantu petani Indonesia mengotomatiskan proses penanaman bibit padi secara akurat, hemat waktu, dan efisien.
+**PadiBot** adalah sistem presisi pertanian yang memungkinkan petani Indonesia mengotomatiskan proses tanam padi menggunakan mesin tanam yang dikontrol lewat **smartphone Android**.
 
-Aplikasi mobile dapat terhubung ke mikrokontroler mesin tanam (**ESP32 / Arduino**) melalui:
-- 📶 **WiFi / WebSocket** — via ESP8266/ESP32 (latensi rendah, jangkauan ~100m)
-- 🔵 **Bluetooth** — via HC-05/HM-10 BLE (koneksi instan tanpa router)
-- 📡 **GSM 4G / MQTT** — via SIM800L/SIM7600 (monitoring jarak jauh unlimited)
-- 🧪 **Simulator Virtual** — pengujian offline dan simulasi lintasan tanpa hardware fisik
+Aplikasi terhubung ke **Arduino** melalui 3 metode koneksi:
+- 📶 **WiFi** — via ESP8266/ESP32 (jangkauan ~100m, latensi rendah)
+- 🔵 **Bluetooth** — via HC-05/HC-06/HM-10 BLE (koneksi langsung, tanpa router)
+- 📡 **GSM 4G** — via SIM800L/SIM7600 + MQTT (monitoring remote, unlimited range)
 
-Data petak sawah dan misi disimpan **lokal di SQLite / AsyncStorage** — **100% bekerja offline** di area persawahan tanpa jaringan internet.
-
----
-
-## 🛣️ 4 Pola Jalur Tanam (*Coverage Path Planning*)
-
-1. ⚡ **1. Persegi Panjang / Zig-Zag (Boustrophedon)**: Pola bolak-balik paralel standar paling efisien untuk petakan kotak.
-2. 🔄 **2. Dengan Headland (Area Putar Keliling)**: Menanam area tengah terlebih dahulu, menyisakan area putar rapi di sekeliling batas sawah.
-3. 🌀 **3. Oval / Spiral (Pinggir ke Tengah - Inward)**: Masuk dari sudut batas terluar, menanam memutar konsentris mengecil ke pusat tengah.
-4. 💫 **4. Oval / Spiral (Tengah ke Pinggir - Outward)**: Mulai dari titik pusat tengah sawah, menanam memutar membesar ke arah batas luar.
+Data disimpan **lokal di SQLite** pada device Android — **100% bekerja offline** tanpa internet.
 
 ---
 
-## ✨ Fitur Utama
+## ✨ Fitur Utama (MVP Phase 1)
 
 | Fitur | Deskripsi |
 |-------|-----------|
-| 🌾 **Pemilih Sawah Interaktif** | Pilih dan ganti petak sawah langsung dengan kalkulasi rute seketika |
-| 🛣️ **4 Pola Rute Otomatis** | Algoritma *Coverage Path Planning* dengan kalkulasi metrik real-time |
-| 📷 **Skema Visual Dinamis** | Diagram skema alur masuk (Start), jalur tanam, area putar, dan jalur keluar (End) |
-| 👁️ **High-Def Map Preview** | Kanvas vektor peta sawah gelap dengan legenda lengkap & panah arah |
-| 🎯 **Eksekusi Misi Live** | Pelacakan traktor live 🚜, progress bar, area selesai ($m^2$), sisa area, dan kecepatan |
-| 🕹️ **Kontrol Manual** | Virtual D-Pad hold-to-move dengan slider kecepatan |
-| ⛔ **Emergency Stop** | Tombol berhenti darurat dengan proteksi konfirmasi |
-| 📊 **Riwayat & Laporan** | Pencatatan riwayat tanam, durasi, dan persentase cakupan |
-| 💾 **Offline-First Storage** | SQLite + Drizzle ORM (Android) dan AsyncStorage (Web) |
+| 🗺️ **Pemetaan Sawah** | Input batas sawah manual (titik demi titik) |
+| 🛣️ **Generate Jalur Otomatis** | Algoritma boustrophedon (pola meander/lawnmower) |
+| 👁️ **Preview Rute** | Visualisasi jalur tanam sebelum dijalankan |
+| 🎯 **Eksekusi Misi** | Start / Pause / Resume / Stop misi tanam |
+| 📡 **Telemetri Real-time** | Monitor posisi, baterai, GPS, kecepatan |
+| 🕹️ **Kontrol Manual** | D-Pad kontrol langsung ke mesin Arduino |
+| ⛔ **Emergency Stop** | Tombol berhenti darurat — selalu tersedia |
+| 📊 **Riwayat Misi** | Log historis semua misi + laporan cakupan |
+| 💾 **Offline First** | SQLite lokal — tidak butuh internet |
 
 ---
 
-## 🔧 Hardware & Komponen Mesin
+## 🔧 Hardware yang Diperlukan
 
-### Controller & Komunikasi
-- **ESP32 / Arduino Mega / Uno** (Unit Pemroses Utama)
-- **Modul Komunikasi:** ESP32 WiFi / HC-05 Bluetooth / SIM7600 4G LTE
-- **GNSS / RTK GPS:** u-blox NEO-M8N / ZED-F9P (Akurasi level sentimeter)
-- **Motor & Aktuator:** Motor Penggerak Kanan-Kiri, Motor Kemudi, dan Mekanisme Tanam Padi
+### Mikrokontroler
+- **Arduino Uno / Mega / Nano** (logic utama)
+
+### Modul Komunikasi (pilih salah satu)
+| Modul | Tipe | Jangkauan |
+|-------|------|-----------|
+| ESP8266 / ESP32 | WiFi | ~50-100m |
+| HC-05 / HC-06 | Bluetooth Classic | ~10-30m |
+| HM-10 | Bluetooth BLE | ~10-30m |
+| SIM800L | GSM 2G/GPRS | Unlimited |
+| SIM7600 | 4G LTE | Unlimited |
+
+### Komponen Lain
+- **GPS Module:** u-blox NEO-6M / NEO-7M / NEO-8M
+- **Motor Driver:** L298N atau IBT-2
+- **Battery:** LiPo / SLA sesuai mesin
 
 ---
 
-## 🚀 Cara Menjalankan Aplikasi
+## 📱 Tech Stack
 
-### 1. Di Browser / Komputer (Localhost)
+### Mobile App (Android)
+- **Framework:** React Native + Expo SDK 51
+- **Navigation:** Expo Router v3
+- **Database:** SQLite via `expo-sqlite` + Drizzle ORM
+- **State:** Zustand
+- **Language:** TypeScript (strict)
+
+### Arduino Firmware (C/C++)
+- **WiFi:** HTTP Server + WebSocket via ESP8266/ESP32
+- **Bluetooth:** Serial JSON via HC-05/HM-10
+- **GSM:** MQTT via SIM7600 + PubSubClient
+- **Libraries:** ArduinoJson, TinyGPS++, PubSubClient
+
+---
+
+## 🚀 Quick Start
+
+### Prasyarat
+- Node.js 20+
+- Expo CLI (`npm install -g expo-cli`)
+- Android Studio (untuk emulator) atau device Android fisik
+- Arduino IDE / PlatformIO (untuk firmware)
+
+### Setup Mobile App
 ```bash
 # Clone repository
 git clone https://github.com/adimaryanto-stack/Padi-Bot.git
@@ -119,54 +94,104 @@ cd Padi-Bot
 # Install dependencies
 npm install
 
-# Jalankan server
-npx expo start --web
+# Jalankan di Android emulator
+npx expo run:android
+
+# Atau jalankan di device fisik
+npx expo start --android
 ```
-Buka **`http://localhost:8081`** di browser.
 
-### 2. Di Smartphone Android (Expo Go)
-1. Buka aplikasi **Expo Go** di Android.
-2. Masukkan URL: **`exp://<IP-KOMPUTER-ANDA>:8081`**
+### Setup Arduino Firmware
 
-### 3. Build File Standalone `.apk`
-```bash
-# Build APK Android via EAS Cloud Build
-eas build --platform android --profile preview
+#### WiFi (ESP8266/ESP32)
+1. Buka `arduino/PadiBot_WiFi/PadiBot_WiFi.ino` di Arduino IDE
+2. Edit `config.h` — isi WiFi SSID & password
+3. Upload ke board
+4. Di app Android → Pengaturan → Koneksi: WiFi → masukkan IP Arduino
+
+#### Bluetooth (HC-05)
+1. Buka `arduino/PadiBot_Bluetooth/PadiBot_Bluetooth.ino`
+2. Edit `config.h` — atur baud rate (default 9600)
+3. Upload ke Arduino, pasang modul HC-05 ke Serial1
+4. Di app Android → Pengaturan → Koneksi: Bluetooth → scan & pilih HC-05
+
+#### GSM 4G (SIM7600)
+1. Buka `arduino/PadiBot_GSM/PadiBot_GSM.ino`
+2. Edit `config.h` — isi APN, MQTT broker, device ID
+3. Upload ke Arduino
+4. Di app Android → Pengaturan → Koneksi: GSM 4G → isi MQTT config
+
+---
+
+## 📁 Struktur Project
+
+```
+Padi-Bot/
+├── app/                    # React Native screens (Expo Router)
+├── components/             # UI components
+├── db/                     # SQLite schema & queries (Drizzle ORM)
+├── services/               # Business logic (route planner, machine protocol)
+│   ├── routePlanner/       # Boustrophedon coverage path planning
+│   └── machineProtocol/    # WiFi / BT / GSM / Simulator connections
+├── stores/                 # Zustand global state
+├── arduino/                # Arduino firmware (C/C++)
+│   ├── PadiBot_WiFi/       # Firmware WiFi (ESP8266/ESP32)
+│   ├── PadiBot_Bluetooth/  # Firmware Bluetooth (HC-05/HM-10)
+│   └── PadiBot_GSM/        # Firmware GSM 4G (SIM800L/SIM7600)
+├── docs/                   # Dokumentasi lengkap
+│   ├── design.md           # UI/UX Design System
+│   └── ...
+└── README.md
 ```
 
 ---
 
-## 📁 Struktur Direktori
+## 📖 Dokumentasi
 
-```
-padi-bot/
-├── app/                        # Halaman & Routing (Expo Router v3)
-│   ├── (tabs)/                 # Tab Navigation (Beranda, Sawah, Riwayat, Pengaturan)
-│   ├── mission/                # Alur Misi (Pengaturan Tanam, Preview Jalur, Eksekusi)
-│   └── manual-control.tsx      # Modal Kontrol Manual D-Pad
-├── components/                 # Komponen UI & Kanvas Peta
-│   ├── mission/RouteCanvas.tsx # Kanvas Peta Rute Tanam High-Definition SVG
-│   └── mission/PatternPreviewDiagram.tsx # Skema Diagram Pola Alur Visual
-├── db/                         # Skema SQLite & Drizzle ORM
-├── services/
-│   ├── routePlanner/           # Algoritma Boustrophedon & Spiral Coverage Path
-│   └── machineProtocol/        # Driver Koneksi WiFi, BT, GSM, & Simulator
-├── stores/                     # Global State Management (Zustand)
-├── docs/screenshots/           # Tangkapan Layar & Banner Aplikasi
-└── aistudio-export.html        # Single-File Standalone Web App untuk Google AI Studio
-```
+| Dokumen | Deskripsi |
+|---------|-----------|
+| [PRD v1.1](PADI_BOT_PRD_v1.1.md) | Product Requirements Document |
+| [Design System](design.md) | UI/UX design tokens, wireframes, komponen |
+| [MVP Roadmap](PADI_BOT_MVP_ROADMAP.md) | Sprint plan 6 minggu |
+| [System Diagrams](PADI_BOT_DIAGRAMS.md) | Architecture & flow diagrams (Mermaid) |
+| [Analysis Summary](PADI_BOT_ANALYSIS_SUMMARY.md) | Gap analysis & improvements |
 
 ---
 
-## 👨‍💻 Author & Kontributor
+## 🗺️ Roadmap
+
+| Phase | Minggu | Deskripsi |
+|-------|--------|-----------|
+| **Phase 1 MVP** | 1-4 | App Android + Simulator (offline, SQLite) |
+| **Phase 1+** | 5-6 | Koneksi Arduino WiFi + Bluetooth |
+| **Phase 2** | 7-10 | GPS walk-mapping, advanced routing |
+| **Phase 2.5** | 11-12 | Obstacle avoidance, headland strategies |
+| **Phase 3** | 13-16 | GSM 4G remote, cloud sync, analytics |
+| **Phase 4** | Future | RTK-GNSS, LiDAR, full autonomy |
+
+---
+
+## 🤝 Kontribusi
+
+1. Fork repository ini
+2. Buat branch fitur: `git checkout -b feature/nama-fitur`
+3. Commit perubahan: `git commit -m 'feat: tambah fitur X'`
+4. Push ke branch: `git push origin feature/nama-fitur`
+5. Buat Pull Request
+
+---
+
+## 👨‍💻 Author
 
 **Adi Maryanto**  
 GitHub: [@adimaryanto-stack](https://github.com/adimaryanto-stack)
 
 ---
 
-## 📄 Lisensi
+## 📄 License
 
-Proyek ini dilisensikan di bawah [MIT License](LICENSE).
+MIT License — lihat [LICENSE](LICENSE) untuk detail.
 
-> **PadiBot** — *Solusi Cerdas Tanam Padi Masa Depan* 🌾🤖
+---
+
+> **PadiBot** — Tanam Cerdas, Panen Lebih 🌾🤖
