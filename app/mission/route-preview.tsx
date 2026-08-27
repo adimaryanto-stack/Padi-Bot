@@ -9,6 +9,8 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFieldStore } from '@/stores/fieldStore';
 import { useMissionStore } from '@/stores/missionStore';
+import { generateCoverageRoute } from '@/services/routePlanner';
+import { RoutePattern } from '@/types';
 import { RouteCanvas } from '@/components/mission/RouteCanvas';
 import { Button } from '@/components/ui/Button';
 import { Colors, Typography, Spacing } from '@/constants/theme';
@@ -25,14 +27,24 @@ export default function RoutePreviewScreen() {
     pattern?: string;
   }>();
 
+  const fields = useFieldStore((state) => state.fields);
   const getActiveField = useFieldStore((state) => state.getActiveField);
-  const activeField = getActiveField();
+  const activeField = getActiveField() || fields[0];
 
-  const pendingRoute = useMissionStore((state) => state.pendingRoute);
+  const storedRoute = useMissionStore((state) => state.pendingRoute);
   const addMission = useMissionStore((state) => state.addMission);
   const setActiveMission = useMissionStore((state) => state.setActiveMission);
 
   const [isApproving, setIsApproving] = useState(false);
+
+  // Auto fallback route generation if not in store
+  const pendingRoute = storedRoute || (activeField ? generateCoverageRoute({
+    fieldBoundary: activeField.boundary,
+    machineWidthM: parseFloat(params.machineWidth) || 1.2,
+    headlandWidthM: parseFloat(params.headlandWidth) || 1.5,
+    orientationDeg: parseFloat(params.orientationDeg) || 0,
+    pattern: (params.pattern as RoutePattern) || 'BOUSTROPHEDON',
+  }) : null);
 
   if (!activeField || !pendingRoute) {
     return (

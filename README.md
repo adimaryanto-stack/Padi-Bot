@@ -18,33 +18,40 @@
 
 ---
 
-## 📱 Tampilan Antarmuka Aplikasi (Mobile App Screens)
+## 📱 Tampilan Antarmuka Aplikasi (Live Mobile Screenshots)
 
 <div align="center">
   <table>
     <tr>
-      <td align="center" width="33%">
+      <td align="center" width="25%">
         <b>1. Dashboard (Beranda)</b><br/>
         <img src="docs/screenshots/dashboard.png" alt="Dashboard Screen" width="100%" style="border-radius: 12px;" />
       </td>
-      <td align="center" width="33%">
+      <td align="center" width="25%">
         <b>2. Pengaturan Tanam</b><br/>
         <img src="docs/screenshots/planting-settings.png" alt="Planting Settings Screen" width="100%" style="border-radius: 12px;" />
       </td>
-      <td align="center" width="33%">
+      <td align="center" width="25%">
         <b>3. Preview Jalur Otomatis</b><br/>
         <img src="docs/screenshots/route-preview.png" alt="Route Preview Screen" width="100%" style="border-radius: 12px;" />
+      </td>
+      <td align="center" width="25%">
+        <b>4. Kontrol Manual D-Pad</b><br/>
+        <img src="docs/screenshots/manual-control.png" alt="Manual Control Screen" width="100%" style="border-radius: 12px;" />
       </td>
     </tr>
     <tr>
       <td align="center">
-        <small>Monitoring status traktor, telemetri live, baterai, GPS, dan pemilihan petak sawah aktif.</small>
+        <small>Monitoring status traktor, telemetri live, baterai, GPS RTK, dan pemilih petak sawah aktif.</small>
       </td>
       <td align="center">
-        <small>Pilihan 4 pola jalur tanam (Boustrophedon, Headland, Spiral) + skema diagram visual animasi.</small>
+        <small>Pilihan 4 pola rute (Boustrophedon, Headland, Spiral In/Out) + diagram alur visual dinamis.</small>
       </td>
       <td align="center">
-        <small>Visualisasi jalur tanam presisi tinggi, area putar (headland kuning), titik start & end.</small>
+        <small>Visualisasi peta vektor jalur tanam presisi tinggi dengan area putar headland kuning.</small>
+      </td>
+      <td align="center">
+        <small>Tombol D-Pad manual interaktif untuk manuver traktor secara langsung + berhenti darurat.</small>
       </td>
     </tr>
   </table>
