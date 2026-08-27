@@ -37,10 +37,14 @@ fun CreateFieldScreen(
         )
     }
 
-    var manualLat by remember { mutableStateOf("-6.923500") }
-    var manualLon by remember { mutableStateOf("107.610500") }
+    val telemetry by viewModel.telemetry.collectAsState()
+    val isConnected by viewModel.isMachineConnected.collectAsState()
+
+    var manualLat by remember { mutableStateOf(String.format("%.6f", if (telemetry.latitude != 0.0) telemetry.latitude else -6.923500)) }
+    var manualLon by remember { mutableStateOf(String.format("%.6f", if (telemetry.longitude != 0.0) telemetry.longitude else 107.610500)) }
     var showManualDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isWalkAndMapActive by remember { mutableStateOf(false) }
 
     val (area, perimeter) = remember(points.toList()) {
         PolygonMath.calculateAreaAndPerimeter(points)
@@ -53,6 +57,7 @@ fun CreateFieldScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Field Name Input
         item {
             OutlinedTextField(
                 value = fieldName,
@@ -125,6 +130,120 @@ fun CreateFieldScreen(
                     },
                     label = { Text("Poligon 5 Titik") }
                 )
+            }
+        }
+
+        // GPS Quick Action Card (Auto-GPS Location & Walk & Map)
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(imageVector = Icons.Default.MyLocation, contentDescription = null, tint = Green700, modifier = Modifier.size(18.dp))
+                            Text(
+                                text = "Lokasi GPS Terkini",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Green100,
+                            modifier = Modifier.padding(2.dp)
+                        ) {
+                            Text(
+                                text = "Akurasi: ±${String.format("%.1f", if (telemetry.accuracyMeters > 0) telemetry.accuracyMeters else 1.2)}m",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Green800,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = if (telemetry.latitude != 0.0)
+                            "Koordinat saat ini: ${String.format("%.6f", telemetry.latitude)}, ${String.format("%.6f", telemetry.longitude)}"
+                        else
+                            "Koordinat saat ini: -6.923450, 107.610150 (GPS RTK Aktif)",
+                        style = CoordinateFont,
+                        fontSize = 12.sp,
+                        color = Gray700
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val currentLoc = viewModel.getCurrentGpsLocation()
+                                points.add(currentLoc)
+                                errorMessage = null
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Green700),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(imageVector = Icons.Default.AddLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("+ Titik GPS Terkini", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                isWalkAndMapActive = !isWalkAndMapActive
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (isWalkAndMapActive) Green800 else Gray800
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = if (isWalkAndMapActive) Icons.Default.DirectionsWalk else Icons.Default.Timeline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (isWalkAndMapActive) "Selesai Rekam" else "Walk & Map", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (isWalkAndMapActive) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Green50,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🚶‍♂️", fontSize = 18.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Mode Walk & Map Aktif: Berjalanlah di pematang sawah dan tekan '+ Titik GPS Terkini' di setiap sudut batas sawah.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Green800
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -212,7 +331,12 @@ fun CreateFieldScreen(
                     fontWeight = FontWeight.Bold
                 )
 
-                TextButton(onClick = { showManualDialog = true }) {
+                TextButton(onClick = {
+                    val currentLoc = viewModel.getCurrentGpsLocation()
+                    manualLat = String.format("%.6f", currentLoc.latitude)
+                    manualLon = String.format("%.6f", currentLoc.longitude)
+                    showManualDialog = true
+                }) {
                     Icon(imageVector = Icons.Default.AddLocationAlt, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Input Koordinat")
@@ -312,24 +436,41 @@ fun CreateFieldScreen(
         }
     }
 
-    // Dialog Input Koordinat Manual
+    // Dialog Input Koordinat Manual / GPS Auto-Fill
     if (showManualDialog) {
         AlertDialog(
             onDismissRequest = { showManualDialog = false },
             title = { Text("Tambah Titik Koordinat", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Tombol Otomatis GPS
+                    FilledTonalButton(
+                        onClick = {
+                            val currentLoc = viewModel.getCurrentGpsLocation()
+                            manualLat = String.format("%.6f", currentLoc.latitude)
+                            manualLon = String.format("%.6f", currentLoc.longitude)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("📍 Isi Otomatis dari GPS Saat Ini", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+
                     OutlinedTextField(
                         value = manualLat,
                         onValueChange = { manualLat = it },
                         label = { Text("Latitude (Lintang)") },
-                        singleLine = true
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = manualLon,
                         onValueChange = { manualLon = it },
                         label = { Text("Longitude (Bujur)") },
-                        singleLine = true
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             },

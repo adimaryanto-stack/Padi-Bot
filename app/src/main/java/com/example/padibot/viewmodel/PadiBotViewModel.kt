@@ -226,6 +226,15 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         machineService.injectError(errorType)
     }
 
+    fun getCurrentGpsLocation(): GeoPoint {
+        val t = telemetry.value
+        return if (t.latitude != 0.0 && t.longitude != 0.0) {
+            GeoPoint(t.latitude, t.longitude)
+        } else {
+            GeoPoint(-6.923450, 107.610150)
+        }
+    }
+
     fun clearAllUserData() {
         viewModelScope.launch {
             repository.clearAllData()
