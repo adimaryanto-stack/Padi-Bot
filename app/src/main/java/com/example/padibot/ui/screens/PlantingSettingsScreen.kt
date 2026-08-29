@@ -38,6 +38,10 @@ fun PlantingSettingsScreen(
     val laneOrientation by viewModel.laneOrientation.collectAsState()
     val generatedRoute by viewModel.generatedRoute.collectAsState()
 
+    val rowSpacingCm by viewModel.rowSpacingCm.collectAsState()
+    val plantSpacingCm by viewModel.plantSpacingCm.collectAsState()
+    val speedMps by viewModel.speedMps.collectAsState()
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -168,10 +172,10 @@ fun PlantingSettingsScreen(
                                     colors = RadioButtonDefaults.colors(selectedColor = Green700)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column {
                                     Text(
-                                        text = pattern.formatLabel(),
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        text = pattern.title,
+                                        style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isSelected) Green900 else Gray900
                                     )
@@ -185,13 +189,13 @@ fun PlantingSettingsScreen(
                         }
                     }
 
-                    // Pattern Schematic Visual Diagram
+                    // Pattern Schematic Visual Diagram Card
                     PatternSchematicCard(pattern = selectedPattern)
                 }
             }
         }
 
-        // 3. Machine Parameters Configuration Card
+        // 3. 5 Planting Parameters (Sesuai preview.webp & PRD)
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -199,125 +203,113 @@ fun PlantingSettingsScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
-                        text = "⚙️ Parameter Mesin & Tanam",
+                        text = "⚙️ Parameter Tanam & Mesin (Standar PRD)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
 
-                    // 1. Machine Width
+                    // 1. Jarak Antar Baris
                     Column {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Lebar Kerja Mesin (W)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = String.format("%.2f m", machineWidth),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Green700
-                            )
+                            Text("Jarak Antar Baris", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(String.format("%.0f cm", rowSpacingCm), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Green700)
+                        }
+                        Slider(
+                            value = rowSpacingCm.toFloat(),
+                            onValueChange = { viewModel.setRowSpacingCm(it.toDouble()) },
+                            valueRange = 20f..40f,
+                            steps = 19,
+                            colors = SliderDefaults.colors(thumbColor = Green700, activeTrackColor = Green700)
+                        )
+                    }
+
+                    HorizontalDivider(color = Gray200)
+
+                    // 2. Jarak Antar Tanaman
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Jarak Antar Tanaman", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(String.format("%.0f cm", plantSpacingCm), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Green700)
+                        }
+                        Slider(
+                            value = plantSpacingCm.toFloat(),
+                            onValueChange = { viewModel.setPlantSpacingCm(it.toDouble()) },
+                            valueRange = 15f..35f,
+                            steps = 19,
+                            colors = SliderDefaults.colors(thumbColor = Green700, activeTrackColor = Green700)
+                        )
+                    }
+
+                    HorizontalDivider(color = Gray200)
+
+                    // 3. Lebar Mesin (Kerja Efektif)
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Lebar Mesin (Kerja Efektif)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(String.format("%.0f cm (%.2f m)", machineWidth * 100, machineWidth), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Green700)
                         }
                         Slider(
                             value = machineWidth.toFloat(),
                             onValueChange = { viewModel.setMachineWidth(it.toDouble()) },
                             valueRange = 0.8f..3.0f,
                             steps = 21,
-                            modifier = Modifier.testTag("slider_machine_width"),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Green700,
-                                activeTrackColor = Green700
-                            )
-                        )
-                        Text(
-                            text = "ℹ️ Standar mesin tanam padi di Indonesia: 1.20 - 2.00 meter",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray600
+                            colors = SliderDefaults.colors(thumbColor = Green700, activeTrackColor = Green700)
                         )
                     }
 
                     HorizontalDivider(color = Gray200)
 
-                    // 2. Headland Width
+                    // 4. Kecepatan Mesin
                     Column {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Lebar Headland / Area Putar (H)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = String.format("%.2f m", headlandWidth),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = WarningOrange
-                            )
+                            Text("Kecepatan Mesin", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(String.format("%.1f m/s", speedMps), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = InfoBlue)
+                        }
+                        Slider(
+                            value = speedMps.toFloat(),
+                            onValueChange = { viewModel.setSpeedMps(it.toDouble()) },
+                            valueRange = 0.2f..2.0f,
+                            steps = 17,
+                            colors = SliderDefaults.colors(thumbColor = InfoBlue, activeTrackColor = InfoBlue)
+                        )
+                    }
+
+                    HorizontalDivider(color = Gray200)
+
+                    // 5. Area Putar (Headland)
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Area Putar (Headland)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(String.format("%.1f m", headlandWidth), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = WarningOrange)
                         }
                         Slider(
                             value = headlandWidth.toFloat(),
                             onValueChange = { viewModel.setHeadlandWidth(it.toDouble()) },
-                            valueRange = 1.0f..6.0f,
-                            steps = 24,
-                            modifier = Modifier.testTag("slider_headland_width"),
-                            colors = SliderDefaults.colors(
-                                thumbColor = WarningOrange,
-                                activeTrackColor = WarningOrange
-                            )
-                        )
-                        Text(
-                            text = "Area perimeter pematang aman untuk manuver putar balik",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray600
-                        )
-                    }
-
-                    HorizontalDivider(color = Gray200)
-
-                    // 3. Lane Orientation Angle
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Orientasi Arah Jalur (Sudut)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = String.format("%.0f°", laneOrientation),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Green700
-                            )
-                        }
-                        Slider(
-                            value = laneOrientation.toFloat(),
-                            onValueChange = { viewModel.setLaneOrientation(it.toDouble()) },
-                            valueRange = 0f..180f,
-                            steps = 35,
-                            modifier = Modifier.testTag("slider_lane_orientation"),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Green700,
-                                activeTrackColor = Green700
-                            )
-                        )
-                        Text(
-                            text = "0° = Timur-Barat (Horisontal), 90° = Utara-Selatan (Vertikal)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray600
+                            valueRange = 1.0f..5.0f,
+                            steps = 15,
+                            colors = SliderDefaults.colors(thumbColor = WarningOrange, activeTrackColor = WarningOrange)
                         )
                     }
                 }

@@ -121,7 +121,7 @@ fun MissionDetailScreen(
             }
         }
 
-        // Comprehensive Audit Telemetry
+        // Comprehensive Audit Telemetry (Sesuai preview.webp Screen 6)
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -131,18 +131,23 @@ fun MissionDetailScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Laporan & Statistik Misi",
+                        text = "Statistik & Metrik Penanaman",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+
+                    val areaM2 = field?.areaM2 ?: 2000.0
+                    val coveragePct = (mission.actualCoveragePct.takeIf { it > 0 } ?: mission.estimatedCoveragePct) / 100.0
+                    val areaPlanted = areaM2 * coveragePct
+                    val areaMissed = (areaM2 - areaPlanted).coerceAtLeast(0.0)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        DetailStatBox("Luas Sawah", field?.formatArea() ?: "0 m²")
-                        DetailStatBox("Cakupan Riil", String.format("%.1f%%", mission.actualCoveragePct.takeIf { it > 0 } ?: mission.estimatedCoveragePct))
-                        DetailStatBox("Total Jalur", "${mission.totalLanes} Jalur")
+                        DetailStatBox("Luas Total", String.format("%.0f m²", areaM2))
+                        DetailStatBox("Selesai Ditanam", String.format("%.0f m²", areaPlanted))
+                        DetailStatBox("Area Terlewat", String.format("%.0f m²", areaMissed))
                     }
 
                     HorizontalDivider(color = Gray200)
@@ -151,9 +156,9 @@ fun MissionDetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        DetailStatBox("Panjang Lintasan", mission.formatDistance())
-                        DetailStatBox("Durasi Tanam", mission.formatDuration())
-                        DetailStatBox("Lebar Mesin", String.format("%.2f m", mission.machineWidthM))
+                        DetailStatBox("Durasi", mission.formatDuration())
+                        DetailStatBox("Cakupan", String.format("%.1f%%", coveragePct * 100))
+                        DetailStatBox("Total Jalur", "${mission.totalLanes} Baris")
                     }
                 }
             }

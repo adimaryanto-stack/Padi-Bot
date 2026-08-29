@@ -31,11 +31,20 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedField = MutableStateFlow<Field?>(null)
     val selectedField: StateFlow<Field?> = _selectedField.asStateFlow()
 
-    // Route Generation parameters
-    private val _machineWidth = MutableStateFlow(1.50)
+    // Route & Planting parameters (PRD & preview.webp)
+    private val _rowSpacingCm = MutableStateFlow(30.0) // Jarak Antar Baris: 30 cm
+    val rowSpacingCm: StateFlow<Double> = _rowSpacingCm.asStateFlow()
+
+    private val _plantSpacingCm = MutableStateFlow(20.0) // Jarak Antar Tanaman: 20 cm
+    val plantSpacingCm: StateFlow<Double> = _plantSpacingCm.asStateFlow()
+
+    private val _machineWidth = MutableStateFlow(1.20) // Lebar Mesin (Kerja Efektif): 120 cm
     val machineWidth: StateFlow<Double> = _machineWidth.asStateFlow()
 
-    private val _headlandWidth = MutableStateFlow(3.00)
+    private val _speedMps = MutableStateFlow(0.8) // Kecepatan Mesin: 0.8 m/s
+    val speedMps: StateFlow<Double> = _speedMps.asStateFlow()
+
+    private val _headlandWidth = MutableStateFlow(1.50) // Area Putar (Headland): 1.5 m
     val headlandWidth: StateFlow<Double> = _headlandWidth.asStateFlow()
 
     private val _laneOrientation = MutableStateFlow(0.0)
@@ -46,6 +55,18 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
 
     fun setDarkTheme(isDark: Boolean) {
         _isDarkTheme.value = isDark
+    }
+
+    fun setRowSpacingCm(cm: Double) {
+        _rowSpacingCm.value = cm.coerceIn(15.0, 50.0)
+    }
+
+    fun setPlantSpacingCm(cm: Double) {
+        _plantSpacingCm.value = cm.coerceIn(10.0, 40.0)
+    }
+
+    fun setSpeedMps(mps: Double) {
+        _speedMps.value = mps.coerceIn(0.2, 2.0)
     }
 
     private val _selectedPattern = MutableStateFlow(RoutePattern.BOUSTROPHEDON)

@@ -397,44 +397,78 @@ fun CreateFieldScreen(
                     color = ErrorRed,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        // Save Button
+        // 3-Button Bottom Mapping Action Bar (Sesuai preview.webp Screen 2)
         item {
-            Button(
-                onClick = {
-                    if (fieldName.isBlank()) {
-                        errorMessage = "Nama sawah wajib diisi!"
-                        return@Button
-                    }
-                    if (points.size < 3) {
-                        errorMessage = "Minimal 3 titik batas sawah diperlukan!"
-                        return@Button
-                    }
-                    if (area < 20.0) {
-                        errorMessage = "Luas sawah terlalu kecil. Pastikan titik membentuk poligon tertutup."
-                        return@Button
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 1. Titik (+ GPS Point)
+                    OutlinedButton(
+                        onClick = {
+                            val cur = viewModel.getCurrentGpsLocation()
+                            points.add(GeoPoint(cur.latitude, cur.longitude))
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("📍", fontSize = 16.sp)
+                            Text("Titik", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
 
-                    viewModel.createField(fieldName, points.toList()) {
-                        onNavigateBack()
+                    // 2. Hapus (Delete last point)
+                    OutlinedButton(
+                        onClick = {
+                            if (points.isNotEmpty()) {
+                                points.removeAt(points.size - 1)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🗑️", fontSize = 16.sp)
+                            Text("Hapus", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("button_save_field"),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Green700)
-            ) {
-                Icon(imageVector = Icons.Default.Save, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Simpan Sawah", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+
+                    // 3. Selesai (Save)
+                    Button(
+                        onClick = {
+                            if (fieldName.isBlank()) {
+                                fieldName = "Sawah #${System.currentTimeMillis() % 1000}"
+                            }
+                            if (points.size < 3) {
+                                errorMessage = "Minimal 3 titik batas sawah diperlukan!"
+                                return@Button
+                            }
+                            viewModel.createField(fieldName, points.toList()) {
+                                onNavigateBack()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Green700)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("⏱️", fontSize = 16.sp)
+                            Text("Selesai", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
-    }
 
     // Dialog Input Koordinat Manual / GPS Auto-Fill
     if (showManualDialog) {
