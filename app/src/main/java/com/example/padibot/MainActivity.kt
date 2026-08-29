@@ -35,7 +35,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            PadiBotTheme {
+            val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+            PadiBotTheme(darkTheme = isDarkTheme) {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route

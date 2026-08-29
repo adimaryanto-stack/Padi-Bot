@@ -41,6 +41,13 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
     private val _laneOrientation = MutableStateFlow(0.0)
     val laneOrientation: StateFlow<Double> = _laneOrientation.asStateFlow()
 
+    private val _isDarkTheme = MutableStateFlow(false) // Default to Versi Light (Terang)
+    val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
+
+    fun setDarkTheme(isDark: Boolean) {
+        _isDarkTheme.value = isDark
+    }
+
     private val _selectedPattern = MutableStateFlow(RoutePattern.BOUSTROPHEDON)
     val selectedPattern: StateFlow<RoutePattern> = _selectedPattern.asStateFlow()
 

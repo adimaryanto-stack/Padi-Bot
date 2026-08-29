@@ -1,6 +1,8 @@
 package com.example.padibot.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,6 +27,8 @@ fun SettingsScreen(
     viewModel: PadiBotViewModel
 ) {
     val currentSettings by viewModel.machineSettings.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
     var connectionType by remember(currentSettings) { mutableStateOf(currentSettings.connectionType) }
     var wifiIp by remember(currentSettings) { mutableStateOf(currentSettings.wifiIp) }
     var wifiPort by remember(currentSettings) { mutableStateOf(currentSettings.wifiPort.toString()) }
@@ -179,7 +184,83 @@ fun SettingsScreen(
             }
         }
 
-        // 2. Simulator Fault Injection Testing
+        // 2. Application Theme Settings Card (Versi Light Default)
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Tema Tampilan Aplikasi",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Pilih skema warna antarmuka untuk kenyamanan penggunaan di bawah terik matahari lapangan:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray600
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (!isDarkTheme) Green100 else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (!isDarkTheme) BorderStroke(2.dp, Green700) else null,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { viewModel.setDarkTheme(false) }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("🌞", fontSize = 24.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Versi Light (Terang)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = if (!isDarkTheme) Green900 else Gray800
+                                )
+                                Text("Aktif (Default)", fontSize = 10.sp, color = Green700, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isDarkTheme) Green100 else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isDarkTheme) BorderStroke(2.dp, Green700) else null,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { viewModel.setDarkTheme(true) }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("🌙", fontSize = 24.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Versi Dark (Gelap)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = if (isDarkTheme) Green900 else Gray800
+                                )
+                                Text("Mode Malam", fontSize = 10.sp, color = Gray600)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Simulator Fault Injection Testing
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -239,7 +320,7 @@ fun SettingsScreen(
             }
         }
 
-        // 3. Database Management & Reset
+        // 4. Database Management & Reset
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -272,7 +353,7 @@ fun SettingsScreen(
             }
         }
 
-        // 4. About App
+        // 5. About App
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -289,14 +370,15 @@ fun SettingsScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Versi 1.1 • Precision Agriculture MVP",
+                        text = "Versi 1.1.0 • Build 2026",
                         style = MaterialTheme.typography.bodySmall,
                         color = Gray600
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "100% Offline-Capable • Boustrophedon CPP Engine",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Green800
+                        text = "Sistem Kontrol Mesin Tanam Padi Otonom Berbasis Android, RTK GNSS & Arduino",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray700
                     )
                 }
             }
@@ -306,17 +388,19 @@ fun SettingsScreen(
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            title = { Text("Muat Ulang Data Sampel?", fontWeight = FontWeight.Bold) },
-            text = { Text("Semua sawah dan riwayat misi akan di-reset ke data demonstrasi awal.") },
+            title = { Text("Konfirmasi Reset Database", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Semua data petak sawah dan riwayat misi yang telah disimpan akan dikembalikan ke data sampel awal.")
+            },
             confirmButton = {
                 Button(
                     onClick = {
                         viewModel.clearAllUserData()
                         showResetDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Green700)
+                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
                 ) {
-                    Text("Ya, Muat Sampel")
+                    Text("Reset Sekarang")
                 }
             },
             dismissButton = {
