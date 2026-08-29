@@ -27,6 +27,13 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.15); }
+    }
+    .pulse-glow {
+      animation: pulseGlow 1.5s infinite;
+    }
   </style>
 </head>
 <body class="bg-[#F8FAFC] text-slate-800 flex justify-center items-center min-h-screen p-0 sm:p-4">
@@ -35,7 +42,7 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo } = React;
 
-    // --- Mock Data & Models ---
+    // --- Mock Fields & Route Patterns ---
     const INITIAL_FIELDS = [
       {
         id: 'f1',
@@ -90,6 +97,55 @@
       }
     ];
 
+    // Generate waypoints based on pattern for live simulation
+    function generateSimWaypoints(pattern) {
+      if (pattern === 'SPIRAL_INWARD') {
+        return [
+          { x: 50, y: 50, heading: 0 },
+          { x: 270, y: 50, heading: 90 },
+          { x: 270, y: 170, heading: 180 },
+          { x: 50, y: 170, heading: 270 },
+          { x: 75, y: 75, heading: 0 },
+          { x: 245, y: 75, heading: 90 },
+          { x: 245, y: 145, heading: 180 },
+          { x: 75, y: 145, heading: 270 },
+          { x: 100, y: 100, heading: 0 },
+          { x: 220, y: 100, heading: 90 },
+          { x: 220, y: 120, heading: 180 },
+          { x: 160, y: 110, heading: 0 }
+        ];
+      } else if (pattern === 'HEADLAND_INNER') {
+        return [
+          { x: 60, y: 70, heading: 0 },
+          { x: 250, y: 70, heading: 90 },
+          { x: 250, y: 95, heading: 180 },
+          { x: 60, y: 95, heading: 270 },
+          { x: 60, y: 120, heading: 0 },
+          { x: 250, y: 120, heading: 90 },
+          { x: 250, y: 145, heading: 180 },
+          { x: 60, y: 145, heading: 270 },
+          { x: 45, y: 45, heading: 0 },
+          { x: 275, y: 45, heading: 90 },
+          { x: 275, y: 175, heading: 180 },
+          { x: 45, y: 175, heading: 270 }
+        ];
+      } else {
+        // Boustrophedon (default)
+        return [
+          { x: 60, y: 60, heading: 0 },
+          { x: 260, y: 60, heading: 90 },
+          { x: 260, y: 85, heading: 180 },
+          { x: 60, y: 85, heading: 270 },
+          { x: 60, y: 110, heading: 0 },
+          { x: 260, y: 110, heading: 90 },
+          { x: 260, y: 135, heading: 180 },
+          { x: 60, y: 135, heading: 270 },
+          { x: 60, y: 160, heading: 0 },
+          { x: 260, y: 160, heading: 90 }
+        ];
+      }
+    }
+
     function App() {
       const [currentScreen, setCurrentScreen] = useState('DASHBOARD');
       const [fields, setFields] = useState(INITIAL_FIELDS);
@@ -100,6 +156,7 @@
       const [orientationDeg, setOrientationDeg] = useState(0);
 
       const [connectionMode, setConnectionMode] = useState('SIMULATOR');
+      const [simSpeedMps, setSimSpeedMps] = useState(0.8);
       const [telemetry, setTelemetry] = useState({
         battery: 92,
         speed: 0.00,
@@ -108,10 +165,15 @@
         lat: -6.923500,
         lon: 107.610200,
         progress: 0,
-        currentLane: 0,
+        currentLane: 1,
         totalLanes: 18,
         areaDone: 0,
-        areaRemaining: 1722
+        areaRemaining: 1722,
+        posX: 60,
+        posY: 60,
+        heading: 0,
+        waypointIdx: 0,
+        trail: []
       });
 
       const [isMissionRunning, setIsMissionRunning] = useState(false);
@@ -130,37 +192,83 @@
         return fields.find(f => f.id === selectedFieldId) || fields[0];
       }, [fields, selectedFieldId]);
 
-      // Simulation loop
+      const simWaypoints = useMemo(() => generateSimWaypoints(pattern), [pattern]);
+
+      // Real-time Physics & Simulator Animation Loop
       useEffect(() => {
-        let interval;
+        let timer;
         if (isMissionRunning && !isPaused) {
-          interval = setInterval(() => {
+          timer = setInterval(() => {
             setTelemetry(prev => {
-              const newProgress = Math.min(100, prev.progress + 1.5);
+              const pts = simWaypoints;
+              const target = pts[prev.waypointIdx % pts.length];
+              const dx = target.x - prev.posX;
+              const dy = target.y - prev.posY;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+
+              let nextX = prev.posX;
+              let nextY = prev.posY;
+              let nextWp = prev.waypointIdx;
+              let nextHeading = prev.heading;
+
+              const step = 4.0; // animation step
+              if (dist <= step) {
+                nextX = target.x;
+                nextY = target.y;
+                nextWp = (prev.waypointIdx + 1);
+                if (nextWp >= pts.length) {
+                  setIsMissionRunning(false);
+                }
+              } else {
+                nextX += (dx / dist) * step;
+                nextY += (dy / dist) * step;
+                nextHeading = Math.atan2(dy, dx) * (180 / Math.PI);
+              }
+
+              const newProgress = Math.min(100, Math.round((nextWp / pts.length) * 100));
               const done = Math.round((newProgress / 100) * (activeField.areaM2 || 1722));
               const rem = Math.max(0, (activeField.areaM2 || 1722) - done);
-              const lane = Math.min(prev.totalLanes, Math.floor((newProgress / 100) * prev.totalLanes) + 1);
-
-              if (newProgress >= 100) {
-                setIsMissionRunning(false);
-              }
+              const curLane = Math.min(prev.totalLanes, Math.floor((newProgress / 100) * prev.totalLanes) + 1);
 
               return {
                 ...prev,
+                posX: nextX,
+                posY: nextY,
+                heading: nextHeading,
+                waypointIdx: nextWp,
                 progress: newProgress,
-                speed: 0.50,
-                battery: Math.max(15, prev.battery - 0.05),
-                currentLane: lane,
+                speed: simSpeedMps,
+                battery: Math.max(12, prev.battery - 0.03),
+                currentLane: curLane,
                 areaDone: done,
-                areaRemaining: rem
+                areaRemaining: rem,
+                trail: [...prev.trail.slice(-80), { x: nextX, y: nextY }]
               };
             });
-          }, 1000);
+          }, 150);
         } else if (!isMissionRunning) {
           setTelemetry(prev => ({ ...prev, speed: 0.00 }));
         }
-        return () => clearInterval(interval);
-      }, [isMissionRunning, isPaused, activeField]);
+        return () => clearInterval(timer);
+      }, [isMissionRunning, isPaused, simWaypoints, activeField, simSpeedMps]);
+
+      const resetSimulation = () => {
+        setIsMissionRunning(false);
+        setIsPaused(false);
+        setTelemetry(prev => ({
+          ...prev,
+          progress: 0,
+          areaDone: 0,
+          areaRemaining: activeField.areaM2,
+          currentLane: 1,
+          speed: 0,
+          posX: simWaypoints[0].x,
+          posY: simWaypoints[0].y,
+          heading: simWaypoints[0].heading,
+          waypointIdx: 0,
+          trail: []
+        }));
+      };
 
       return (
         <div className="flex flex-col h-full bg-[#F8FAFC] relative select-none">
@@ -172,6 +280,10 @@
                 fields={fields}
                 telemetry={telemetry}
                 onStartMission={() => setCurrentScreen('PLANTING_SETTINGS')}
+                onOpenSimulator={() => {
+                  resetSimulation();
+                  setCurrentScreen('SIMULATOR_SCREEN');
+                }}
                 onManualControl={() => setCurrentScreen('MANUAL_CONTROL')}
                 onOpenFields={() => setCurrentScreen('FIELD_LIST')}
                 onSelectFieldId={setSelectedFieldId}
@@ -205,9 +317,8 @@
                 headlandWidth={headlandWidth}
                 orientationDeg={orientationDeg}
                 onApprove={() => {
-                  setTelemetry(prev => ({ ...prev, progress: 0, areaDone: 0, areaRemaining: activeField.areaM2 }));
+                  resetSimulation();
                   setIsMissionRunning(true);
-                  setIsPaused(false);
                   setCurrentScreen('EXECUTION');
                 }}
                 onBack={() => setCurrentScreen('PLANTING_SETTINGS')}
@@ -221,6 +332,7 @@
                 telemetry={telemetry}
                 isMissionRunning={isMissionRunning}
                 isPaused={isPaused}
+                simWaypoints={simWaypoints}
                 onPause={() => setIsPaused(true)}
                 onResume={() => setIsPaused(false)}
                 onStop={() => {
@@ -233,6 +345,28 @@
                   setCurrentScreen('DASHBOARD');
                 }}
                 onBack={() => setCurrentScreen('DASHBOARD')}
+              />
+            )}
+
+            {currentScreen === 'SIMULATOR_SCREEN' && (
+              <SimulatorScreenView
+                activeField={activeField}
+                pattern={pattern}
+                setPattern={setPattern}
+                telemetry={telemetry}
+                isMissionRunning={isMissionRunning}
+                isPaused={isPaused}
+                simWaypoints={simWaypoints}
+                simSpeedMps={simSpeedMps}
+                setSimSpeedMps={setSimSpeedMps}
+                onStart={() => {
+                  setIsMissionRunning(true);
+                  setIsPaused(false);
+                }}
+                onPause={() => setIsPaused(true)}
+                onResume={() => setIsPaused(false)}
+                onReset={resetSimulation}
+                onClose={() => setCurrentScreen('DASHBOARD')}
               />
             )}
 
@@ -326,8 +460,8 @@
       );
     }
 
-    // --- SCREEN 1: DASHBOARD VIEW (LIGHT THEME MATCHING AI STUDIO) ---
-    function DashboardView({ activeField, fields, telemetry, onStartMission, onManualControl, onOpenFields, onSelectFieldId }) {
+    // --- SCREEN 1: DASHBOARD VIEW ---
+    function DashboardView({ activeField, fields, telemetry, onStartMission, onOpenSimulator, onManualControl, onOpenFields, onSelectFieldId }) {
       return (
         <div className="p-4 space-y-4">
           {/* Top Header */}
@@ -336,10 +470,13 @@
               <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">PadiBot</h1>
               <p className="text-xs text-slate-500">Tanam Cerdas, Panen Lebih 🌾</p>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Simulator Aktif</span>
-            </div>
+            <button
+              onClick={onOpenSimulator}
+              className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 text-xs font-semibold hover:bg-emerald-200 transition-all cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 pulse-glow"></span>
+              <span>🧪 Buka Simulator</span>
+            </button>
           </div>
 
           {/* Hero Banner */}
@@ -367,7 +504,7 @@
             <div className="grid grid-cols-3 gap-2 pt-1">
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
                 <span className="text-lg text-emerald-600 block">🔋</span>
-                <span className="text-base font-extrabold text-slate-900 block mt-0.5">{telemetry.battery}%</span>
+                <span className="text-base font-extrabold text-slate-900 block mt-0.5">{telemetry.battery.toFixed(0)}%</span>
                 <span className="text-[10px] text-slate-500">Baterai Mesin</span>
               </div>
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
@@ -443,168 +580,261 @@
               <span>Peta Sawah</span>
             </button>
           </div>
+        </div>
+      );
+    }
 
-          {/* Last Mission Card */}
-          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-1">
-            <div className="flex justify-between items-center">
-              <span className="text-[11px] font-semibold text-slate-500">Misi Terakhir</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">SELESAI</span>
+    // --- SCREEN: DEDICATED LIVE SIMULATOR (MATCHING BLOG SPOT) ---
+    function SimulatorScreenView({
+      activeField, pattern, setPattern, telemetry, isMissionRunning, isPaused,
+      simWaypoints, simSpeedMps, setSimSpeedMps, onStart, onPause, onResume, onReset, onClose
+    }) {
+      return (
+        <div className="p-4 space-y-4">
+          <div className="flex justify-between items-center pt-2">
+            <div>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                🧪 SIMULATOR LIVE 2026
+              </span>
+              <h1 className="text-xl font-extrabold text-slate-900 mt-1">Uji Coba Lintasan PadiBot</h1>
             </div>
-            <h5 className="font-bold text-slate-800 text-sm">Misi Penanaman Ciherang #1</h5>
-            <p className="text-xs text-slate-500">Cakupan: 96.5% • 22 Jalur • 18 Menit</p>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
+              ✕
+            </button>
+          </div>
+
+          {/* Pattern Selector in Simulator */}
+          <div className="grid grid-cols-2 gap-2">
+            {PATTERNS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setPattern(p.id);
+                  onReset();
+                }}
+                className={`p-2.5 rounded-xl border text-left text-xs font-bold transition-all ${pattern === p.id ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white text-slate-700 border-slate-200'}`}
+              >
+                <span>{p.emoji} {p.title.split('.')[1]}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Live Simulator Animation Canvas */}
+          <div className="bg-[#1E2D1E] rounded-2xl p-4 border border-emerald-950 shadow-md space-y-3">
+            <div className="flex justify-between items-center text-white">
+              <span className="font-bold text-xs text-emerald-300">Kanvas Visualisasi 2D Live</span>
+              <span className="px-2 py-0.5 bg-emerald-900/80 text-emerald-300 text-[10px] font-mono rounded font-bold">
+                {isMissionRunning ? (isPaused ? '⏸ JEDA' : '▶ BERJALAN') : '⏹ SIAP'}
+              </span>
+            </div>
+
+            <div className="h-64 bg-[#0F1A0F] rounded-xl relative overflow-hidden flex items-center justify-center border border-emerald-900/40">
+              <svg viewBox="0 0 320 220" className="w-full h-full">
+                {/* Soil background grid */}
+                <defs>
+                  <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#162916" strokeWidth="1" />
+                  </pattern>
+                </defs>
+                <rect width="320" height="220" fill="url(#grid)" />
+
+                {/* Boundary Polygon */}
+                <polygon points="30,30 290,40 270,190 40,180" fill="#00E676" fillOpacity="0.12" stroke="#00E676" strokeWidth="2.5" />
+                
+                {/* Planned Waypoint Path */}
+                <polyline
+                  points={simWaypoints.map(p => `${p.x},${p.y}`).join(' ')}
+                  fill="none"
+                  stroke="#38BDF8"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 4"
+                />
+
+                {/* Planted Trail (Neon Green Live Fill) */}
+                {telemetry.trail.length > 1 && (
+                  <polyline
+                    points={telemetry.trail.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="none"
+                    stroke="#00E676"
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity="0.8"
+                  />
+                )}
+
+                {/* Start & End Markers */}
+                <circle cx={simWaypoints[0].x} cy={simWaypoints[0].y} r="5" fill="#10B981" />
+                <circle cx={simWaypoints[simWaypoints.length - 1].x} cy={simWaypoints[simWaypoints.length - 1].y} r="5" fill="#EF4444" />
+
+                {/* Moving Tractor Marker */}
+                <g transform={`translate(${telemetry.posX}, ${telemetry.posY}) rotate(${telemetry.heading})`}>
+                  <circle cx="0" cy="0" r="12" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="2" />
+                  <polygon points="12,0 4,-5 4,5" fill="#FFFFFF" />
+                  <text x="-6" y="4" fontSize="10">🚜</text>
+                </g>
+              </svg>
+            </div>
+
+            {/* Metrics HUD */}
+            <div className="grid grid-cols-3 gap-2 text-center font-mono">
+              <div className="bg-emerald-950/60 rounded-xl p-2.5 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Cakupan</span>
+                <span className="text-base font-extrabold text-emerald-400">{telemetry.progress}%</span>
+              </div>
+              <div className="bg-emerald-950/60 rounded-xl p-2.5 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Tertanam</span>
+                <span className="text-base font-extrabold text-amber-400">{telemetry.areaDone} m²</span>
+              </div>
+              <div className="bg-emerald-950/60 rounded-xl p-2.5 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Kecepatan</span>
+                <span className="text-base font-extrabold text-sky-400">{telemetry.speed.toFixed(2)} m/s</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Simulation Controls */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+            <div className="flex gap-2">
+              {!isMissionRunning ? (
+                <button
+                  onClick={onStart}
+                  className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold text-sm shadow-md"
+                >
+                  ▶ JALANKAN SIMULASI
+                </button>
+              ) : isPaused ? (
+                <button
+                  onClick={onResume}
+                  className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold text-sm shadow-md"
+                >
+                  ▶ LANJUTKAN
+                </button>
+              ) : (
+                <button
+                  onClick={onPause}
+                  className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-extrabold text-sm shadow-md"
+                >
+                  ⏸ JEDA
+                </button>
+              )}
+              <button
+                onClick={onReset}
+                className="px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs"
+              >
+                🔄 Reset
+              </button>
+            </div>
+
+            {/* Speed slider */}
+            <div>
+              <div className="flex justify-between text-xs font-bold text-slate-700">
+                <span>Kecepatan Traktor:</span>
+                <span className="font-mono text-emerald-700">{simSpeedMps.toFixed(1)} m/s</span>
+              </div>
+              <input
+                type="range" min="0.2" max="2.0" step="0.2" value={simSpeedMps}
+                onChange={e => setSimSpeedMps(parseFloat(e.target.value))}
+                className="w-full accent-emerald-600 mt-1"
+              />
+            </div>
           </div>
         </div>
       );
     }
 
-    // --- SCREEN 2: PLANTING SETTINGS VIEW ---
-    function PlantingSettingsView({
-      activeField, fields, selectedFieldId, setSelectedFieldId,
-      pattern, setPattern, machineWidth, setMachineWidth,
-      headlandWidth, setHeadlandWidth, orientationDeg, setOrientationDeg,
-      onNext, onBack
-    }) {
+    // --- OTHER SCREENS (PLANTING SETTINGS, ROUTE PREVIEW, EXECUTION, MANUAL CONTROL, FIELD CREATE, HISTORY, SETTINGS) ---
+    function PlantingSettingsView({ activeField, fields, selectedFieldId, setSelectedFieldId, pattern, setPattern, machineWidth, setMachineWidth, headlandWidth, setHeadlandWidth, orientationDeg, setOrientationDeg, onNext, onBack }) {
       return (
         <div className="p-4 space-y-4">
           <div className="flex items-center gap-3 pt-2">
-            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
-              ←
-            </button>
+            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">←</button>
             <div>
               <h1 className="text-xl font-extrabold text-slate-900">Pengaturan Tanam</h1>
               <p className="text-xs text-slate-500">Langkah 1 dari 3: Konfigurasi Lintasan</p>
             </div>
           </div>
 
-          {/* 1. Field Selector */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700 block">Pilih Sawah yang Dikerjakan:</label>
             <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
-              {fields.map(f => {
-                const isSelected = f.id === selectedFieldId;
-                return (
-                  <div
-                    key={f.id}
-                    onClick={() => setSelectedFieldId(f.id)}
-                    className={`min-w-[180px] p-3 rounded-2xl border cursor-pointer transition-all ${isSelected ? 'bg-emerald-50 border-emerald-600 shadow-sm' : 'bg-white border-slate-200'}`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-xs text-slate-900 truncate">{f.name}</span>
-                      {isSelected && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-600 text-white rounded font-bold">Aktif</span>}
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1">{f.areaM2} m² • {f.boundary.length} Titik</p>
+              {fields.map(f => (
+                <div
+                  key={f.id}
+                  onClick={() => setSelectedFieldId(f.id)}
+                  className={`min-w-[180px] p-3 rounded-2xl border cursor-pointer transition-all ${f.id === selectedFieldId ? 'bg-emerald-50 border-emerald-600 shadow-sm' : 'bg-white border-slate-200'}`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xs text-slate-900 truncate">{f.name}</span>
+                    {f.id === selectedFieldId && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-600 text-white rounded font-bold">Aktif</span>}
                   </div>
-                );
-              })}
+                  <p className="text-[11px] text-slate-500 mt-1">{f.areaM2} m² • {f.boundary.length} Titik</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* 2. Route Pattern Selection (4 Options) */}
           <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
             <h3 className="font-bold text-slate-900 text-sm">Pola Jalur Tanam (Coverage Path)</h3>
             <div className="space-y-2">
-              {PATTERNS.map(p => {
-                const isSelected = p.id === pattern;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => setPattern(p.id)}
-                    className={`p-3 rounded-xl border cursor-pointer flex items-start gap-3 transition-all ${isSelected ? 'bg-emerald-50 border-emerald-600 ring-1 ring-emerald-600' : 'bg-slate-50 border-slate-200'}`}
-                  >
-                    <input type="radio" checked={isSelected} readOnly className="mt-1 accent-emerald-600" />
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900">{p.emoji} {p.title}</h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{p.desc}</p>
-                    </div>
+              {PATTERNS.map(p => (
+                <div
+                  key={p.id}
+                  onClick={() => setPattern(p.id)}
+                  className={`p-3 rounded-xl border cursor-pointer flex items-start gap-3 transition-all ${p.id === pattern ? 'bg-emerald-50 border-emerald-600 ring-1 ring-emerald-600' : 'bg-slate-50 border-slate-200'}`}
+                >
+                  <input type="radio" checked={p.id === pattern} readOnly className="mt-1 accent-emerald-600" />
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">{p.emoji} {p.title}</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{p.desc}</p>
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Dynamic Visual Schematic Diagram */}
-            <div className="bg-[#1E2D1E] rounded-xl p-3 border border-emerald-950 text-white space-y-2">
-              <div className="flex justify-between items-center text-[10px] font-mono">
-                <span className="text-emerald-400 font-bold">● START (Masuk)</span>
-                <span className="text-rose-400 font-bold">■ END (Keluar)</span>
-              </div>
-              <div className="h-20 bg-[#0F1A0F] rounded-lg border border-emerald-900/50 flex items-center justify-center p-2 text-center">
-                <span className="text-xs text-emerald-400 font-mono font-bold leading-relaxed">
-                  {pattern === 'BOUSTROPHEDON' && '═► ═► Jalur Paralel Zig-Zag Bolak-Balik ◄═ ◄═'}
-                  {pattern === 'HEADLAND_INNER' && '▓▓ [Area Tengah Terlebih Dahulu] ──► [Keliling Headland Terluar]'}
-                  {pattern === 'SPIRAL_INWARD' && '◎ Spiral Inward: [Sudut Terluar] ──► [Pusat Tengah Sawah]'}
-                  {pattern === 'SPIRAL_OUTWARD' && '◉ Spiral Outward: [Pusat Tengah] ──► [Batas Luar Sawah]'}
-                </span>
-              </div>
-              <div className="flex gap-4 text-[9px] text-slate-300">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#00E676]"></span> Jalur Tanam</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#FFD54F]"></span> Area Putar</span>
-              </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* 3. Parameters Sliders */}
           <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-4">
             <div>
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-slate-700">Lebar Kerja Mesin (W):</span>
                 <span className="text-emerald-700 font-mono">{machineWidth.toFixed(2)} m</span>
               </div>
-              <input
-                type="range" min="0.8" max="3.0" step="0.1" value={machineWidth}
-                onChange={e => setMachineWidth(parseFloat(e.target.value))}
-                className="w-full accent-emerald-600 mt-1"
-              />
+              <input type="range" min="0.8" max="3.0" step="0.1" value={machineWidth} onChange={e => setMachineWidth(parseFloat(e.target.value))} className="w-full accent-emerald-600 mt-1" />
             </div>
             <div>
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-slate-700">Lebar Headland / Area Putar (H):</span>
                 <span className="text-amber-700 font-mono">{headlandWidth.toFixed(2)} m</span>
               </div>
-              <input
-                type="range" min="1.0" max="6.0" step="0.5" value={headlandWidth}
-                onChange={e => setHeadlandWidth(parseFloat(e.target.value))}
-                className="w-full accent-amber-600 mt-1"
-              />
+              <input type="range" min="1.0" max="6.0" step="0.5" value={headlandWidth} onChange={e => setHeadlandWidth(parseFloat(e.target.value))} className="w-full accent-amber-600 mt-1" />
             </div>
             <div>
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-slate-700">Orientasi Sudut Jalur:</span>
                 <span className="text-emerald-700 font-mono">{orientationDeg}°</span>
               </div>
-              <input
-                type="range" min="0" max="180" step="5" value={orientationDeg}
-                onChange={e => setOrientationDeg(parseInt(e.target.value))}
-                className="w-full accent-emerald-600 mt-1"
-              />
+              <input type="range" min="0" max="180" step="5" value={orientationDeg} onChange={e => setOrientationDeg(parseInt(e.target.value))} className="w-full accent-emerald-600 mt-1" />
             </div>
           </div>
 
-          {/* Action Button */}
-          <button
-            onClick={onNext}
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition-all"
-          >
+          <button onClick={onNext} className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition-all">
             Generate & Preview Jalur →
           </button>
         </div>
       );
     }
 
-    // --- SCREEN 3: ROUTE PREVIEW VIEW ---
     function RoutePreviewView({ activeField, pattern, machineWidth, headlandWidth, orientationDeg, onApprove, onBack }) {
       return (
         <div className="p-4 space-y-4">
           <div className="flex items-center gap-3 pt-2">
-            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
-              ←
-            </button>
+            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">←</button>
             <div>
               <h1 className="text-xl font-extrabold text-slate-900">Preview Jalur Tanam</h1>
               <p className="text-xs text-slate-500">Langkah 2 dari 3: Verifikasi Rute Otomatis</p>
             </div>
           </div>
 
-          {/* High-Def Route Canvas */}
           <div className="bg-[#1E2D1E] rounded-2xl p-4 border border-emerald-950 shadow-md space-y-3">
             <div className="flex justify-between items-center text-white">
               <span className="font-bold text-xs text-emerald-300">Peta Rute: {activeField.name}</span>
@@ -614,20 +844,11 @@
             <div className="h-64 bg-[#0F1A0F] rounded-xl border border-emerald-900/50 relative overflow-hidden flex items-center justify-center">
               <svg viewBox="0 0 320 220" className="w-full h-full">
                 <polygon points="30,30 290,40 270,190 40,180" fill="#00E676" fillOpacity="0.15" stroke="#00E676" strokeWidth="2.5" />
-                <polygon points="50,50 270,58 253,172 58,164" fill="none" stroke="#FFD54F" strokeWidth="1.5" strokeDasharray="4 4" />
-                
-                {/* Parallel Lanes */}
-                <line x1="60" y1="70" x2="250" y2="72" stroke="#00E676" strokeWidth="2" />
-                <line x1="60" y1="90" x2="250" y2="92" stroke="#00E676" strokeWidth="2" />
-                <line x1="60" y1="110" x2="250" y2="112" stroke="#00E676" strokeWidth="2" />
-                <line x1="60" y1="130" x2="250" y2="132" stroke="#00E676" strokeWidth="2" />
-                <line x1="60" y1="150" x2="250" y2="152" stroke="#00E676" strokeWidth="2" />
-
-                {/* Markers */}
-                <circle cx="30" cy="30" r="7" fill="#10B981" />
-                <text x="42" y="34" fill="#FFFFFF" fontSize="10" fontWeight="bold">START</text>
-                <circle cx="40" cy="180" r="7" fill="#EF4444" />
-                <text x="52" y="184" fill="#FFFFFF" fontSize="10" fontWeight="bold">END</text>
+                <polyline points="60,60 260,60 260,85 60,85 60,110 260,110 260,135 60,135 60,160 260,160" fill="none" stroke="#00E676" strokeWidth="2" />
+                <circle cx="60" cy="60" r="6" fill="#10B981" />
+                <text x="70" y="64" fill="#FFFFFF" fontSize="10" fontWeight="bold">START</text>
+                <circle cx="260" cy="160" r="6" fill="#EF4444" />
+                <text x="220" y="164" fill="#FFFFFF" fontSize="10" fontWeight="bold">END</text>
               </svg>
             </div>
 
@@ -647,54 +868,43 @@
             </div>
           </div>
 
-          <button
-            onClick={onApprove}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-extrabold text-base shadow-lg shadow-emerald-600/25 active:scale-[0.99] transition-all"
-          >
+          <button onClick={onApprove} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-extrabold text-base shadow-lg shadow-emerald-600/25 active:scale-[0.99] transition-all">
             ✓ APPROVE & JALANKAN MISI
           </button>
         </div>
       );
     }
 
-    // --- SCREEN 4: EXECUTION VIEW (MODE OTOMATIS LIVE) ---
-    function ExecutionView({ activeField, pattern, telemetry, isMissionRunning, isPaused, onPause, onResume, onStop, onEmergencyStop, onBack }) {
+    function ExecutionView({ activeField, telemetry, isMissionRunning, isPaused, simWaypoints, onPause, onResume, onStop, onEmergencyStop, onBack }) {
       return (
         <div className="p-4 space-y-4">
           <div className="flex justify-between items-center pt-2">
             <div>
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                ● MODE OTOMATIS
+                ● MODE OTOMATIS LIVE
               </span>
               <h1 className="text-xl font-extrabold text-slate-900 mt-1">{activeField.name}</h1>
             </div>
-            <button
-              onClick={onEmergencyStop}
-              className="px-3 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-extrabold shadow-md animate-pulse"
-            >
+            <button onClick={onEmergencyStop} className="px-3 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-extrabold shadow-md animate-pulse">
               E-STOP ⛔
             </button>
           </div>
 
-          {/* Live Progress Canvas */}
           <div className="bg-[#1E2D1E] rounded-2xl p-4 border border-emerald-950 space-y-3">
             <div className="h-60 bg-[#0F1A0F] rounded-xl relative overflow-hidden flex items-center justify-center">
               <svg viewBox="0 0 320 200" className="w-full h-full">
                 <polygon points="30,30 290,40 270,170 40,160" fill="#00E676" fillOpacity="0.15" stroke="#00E676" strokeWidth="2.5" />
-                
-                {/* Completed vs Remaining Lanes */}
-                <line x1="60" y1="60" x2="250" y2="62" stroke="#10B981" strokeWidth="3" />
-                <line x1="60" y1="85" x2="250" y2="87" stroke="#10B981" strokeWidth="3" />
-                <line x1="60" y1="110" x2="250" y2="112" stroke="#F59E0B" strokeWidth="2" strokeDasharray="4 4" />
-                <line x1="60" y1="135" x2="250" y2="137" stroke="#64748B" strokeWidth="1.5" strokeDasharray="3 3" />
-
-                {/* Animated Tractor Marker */}
-                <circle cx="160" cy="111" r="10" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="2" />
-                <text x="156" y="115" fontSize="10">🚜</text>
+                <polyline points={simWaypoints.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#64748B" strokeWidth="1.5" strokeDasharray="3 3" />
+                {telemetry.trail.length > 1 && (
+                  <polyline points={telemetry.trail.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#10B981" strokeWidth="6" opacity="0.8" />
+                )}
+                <g transform={`translate(${telemetry.posX}, ${telemetry.posY}) rotate(${telemetry.heading})`}>
+                  <circle cx="0" cy="0" r="10" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="2" />
+                  <text x="-5" y="4" fontSize="10">🚜</text>
+                </g>
               </svg>
             </div>
 
-            {/* 3 Key Metrics */}
             <div className="grid grid-cols-3 gap-2 text-center font-mono">
               <div className="bg-emerald-950/60 rounded-xl p-2.5 border border-emerald-800/40 text-white">
                 <span className="text-[10px] text-slate-400 block">Area Selesai</span>
@@ -711,17 +921,13 @@
             </div>
           </div>
 
-          {/* Progress Bar */}
           <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
             <div className="flex justify-between text-xs font-bold text-slate-800">
               <span>Progress Penanaman</span>
-              <span className="font-mono text-emerald-700">{telemetry.progress.toFixed(1)}%</span>
+              <span className="font-mono text-emerald-700">{telemetry.progress.toFixed(0)}%</span>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-              <div
-                className="bg-emerald-600 h-full rounded-full transition-all duration-300"
-                style={{ width: `${telemetry.progress}%` }}
-              ></div>
+              <div className="bg-emerald-600 h-full rounded-full transition-all duration-300" style={{ width: `${telemetry.progress}%` }}></div>
             </div>
             <div className="flex justify-between text-[10px] text-slate-500">
               <span>Lajur ke-{telemetry.currentLane} dari {telemetry.totalLanes}</span>
@@ -729,38 +935,20 @@
             </div>
           </div>
 
-          {/* Controls */}
           <div className="flex gap-3">
             {isPaused ? (
-              <button
-                onClick={onResume}
-                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md"
-              >
-                ▶ RESUME MISI
-              </button>
+              <button onClick={onResume} className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md">▶ RESUME MISI</button>
             ) : (
-              <button
-                onClick={onPause}
-                className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm shadow-md"
-              >
-                ⏸ PAUSE
-              </button>
+              <button onClick={onPause} className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm shadow-md">⏸ PAUSE</button>
             )}
-            <button
-              onClick={onStop}
-              className="px-6 py-3.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold text-sm"
-            >
-              Hentikan
-            </button>
+            <button onClick={onStop} className="px-6 py-3.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold text-sm">Hentikan</button>
           </div>
         </div>
       );
     }
 
-    // --- SCREEN 5: MANUAL CONTROL (D-PAD) ---
     function ManualControlView({ telemetry, manualSpeed, setManualSpeed, onClose }) {
       const [pressedDir, setPressedDir] = useState(null);
-
       return (
         <div className="p-4 space-y-5">
           <div className="flex justify-between items-center pt-2">
@@ -768,55 +956,31 @@
               <h1 className="text-xl font-extrabold text-slate-900">Kontrol Manual</h1>
               <p className="text-xs text-slate-500">Teleoperasi D-Pad Nirkabel</p>
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
-              ✕
-            </button>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">✕</button>
           </div>
 
-          {/* D-Pad Layout */}
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col items-center justify-center space-y-4">
-            <button
-              onMouseDown={() => setPressedDir('UP')}
-              onMouseUp={() => setPressedDir(null)}
-              className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'UP' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}
-            >
+            <button onMouseDown={() => setPressedDir('UP')} onMouseUp={() => setPressedDir(null)} className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'UP' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}>
               <span className="text-2xl">▲</span>
               <span className="text-[10px]">MAJU</span>
             </button>
-
             <div className="flex gap-6 items-center">
-              <button
-                onMouseDown={() => setPressedDir('LEFT')}
-                onMouseUp={() => setPressedDir(null)}
-                className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'LEFT' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}
-              >
+              <button onMouseDown={() => setPressedDir('LEFT')} onMouseUp={() => setPressedDir(null)} className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'LEFT' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}>
                 <span className="text-2xl">◀</span>
                 <span className="text-[10px]">KIRI</span>
               </button>
-              <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-lg">
-                🤖
-              </div>
-              <button
-                onMouseDown={() => setPressedDir('RIGHT')}
-                onMouseUp={() => setPressedDir(null)}
-                className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'RIGHT' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}
-              >
+              <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-lg">🤖</div>
+              <button onMouseDown={() => setPressedDir('RIGHT')} onMouseUp={() => setPressedDir(null)} className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'RIGHT' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}>
                 <span className="text-2xl">▶</span>
                 <span className="text-[10px]">KANAN</span>
               </button>
             </div>
-
-            <button
-              onMouseDown={() => setPressedDir('DOWN')}
-              onMouseUp={() => setPressedDir(null)}
-              className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'DOWN' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}
-            >
+            <button onMouseDown={() => setPressedDir('DOWN')} onMouseUp={() => setPressedDir(null)} className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'DOWN' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}>
               <span className="text-2xl">▼</span>
               <span className="text-[10px]">MUNDUR</span>
             </button>
           </div>
 
-          {/* Speed Presets */}
           <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
             <div className="flex justify-between text-xs font-bold">
               <span className="text-slate-700">Kecepatan Motor:</span>
@@ -824,11 +988,7 @@
             </div>
             <div className="grid grid-cols-3 gap-2 pt-1">
               {[30, 60, 100].map(s => (
-                <button
-                  key={s}
-                  onClick={() => setManualSpeed(s)}
-                  className={`py-2 rounded-xl text-xs font-bold border ${manualSpeed === s ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}
-                >
+                <button key={s} onClick={() => setManualSpeed(s)} className={`py-2 rounded-xl text-xs font-bold border ${manualSpeed === s ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
                   {s === 30 ? 'Lambat (30%)' : s === 60 ? 'Sedang (60%)' : 'Cepat (100%)'}
                 </button>
               ))}
@@ -838,7 +998,6 @@
       );
     }
 
-    // --- SCREEN 6: FIELD LIST VIEW ---
     function FieldListView({ fields, selectedFieldId, onSelect, onAddNew, onBack }) {
       return (
         <div className="p-4 space-y-4">
@@ -847,124 +1006,54 @@
               <h1 className="text-xl font-extrabold text-slate-900">Daftar Petak Sawah</h1>
               <p className="text-xs text-slate-500">Pilih atau tambahkan petak sawah baru</p>
             </div>
-            <button
-              onClick={onAddNew}
-              className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm"
-            >
-              + Tambah Sawah
-            </button>
+            <button onClick={onAddNew} className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm">+ Tambah Sawah</button>
           </div>
-
           <div className="space-y-3">
-            {fields.map(f => {
-              const isSelected = f.id === selectedFieldId;
-              return (
-                <div
-                  key={f.id}
-                  onClick={() => onSelect(f.id)}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${isSelected ? 'bg-emerald-50 border-emerald-600 shadow-sm' : 'bg-white border-slate-200'}`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-base">{f.name}</h3>
-                      <p className="text-xs text-slate-500 mt-1">📐 Luas: {f.areaM2} m² • 📍 {f.boundary.length} Titik Batas</p>
-                    </div>
-                    {isSelected && (
-                      <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-full text-[10px] font-bold">
-                        Aktif
-                      </span>
-                    )}
+            {fields.map(f => (
+              <div key={f.id} onClick={() => onSelect(f.id)} className={`p-4 rounded-2xl border cursor-pointer transition-all ${f.id === selectedFieldId ? 'bg-emerald-50 border-emerald-600 shadow-sm' : 'bg-white border-slate-200'}`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base">{f.name}</h3>
+                    <p className="text-xs text-slate-500 mt-1">📐 Luas: {f.areaM2} m² • 📍 {f.boundary.length} Titik Batas</p>
                   </div>
+                  {f.id === selectedFieldId && <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-full text-[10px] font-bold">Aktif</span>}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </div>
       );
     }
 
-    // --- SCREEN 7: FIELD CREATE VIEW (AUTO-GPS & WALK AND MAP) ---
     function FieldCreateView({ fieldName, setFieldName, points, setPoints, walkMapActive, setWalkMapActive, telemetry, onSave, onBack }) {
       return (
         <div className="p-4 space-y-4">
           <div className="flex items-center gap-3 pt-2">
-            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
-              ←
-            </button>
+            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">←</button>
             <div>
               <h1 className="text-xl font-extrabold text-slate-900">Tambah Sawah Baru</h1>
               <p className="text-xs text-slate-500">Pemetaan Batas Koordinat GPS</p>
             </div>
           </div>
-
           <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Nama Sawah (Contoh: Sawah Blok Barat)"
-              value={fieldName}
-              onChange={e => setFieldName(e.target.value)}
-              className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-emerald-600"
-            />
-
-            {/* GPS Auto Location Card */}
+            <input type="text" placeholder="Nama Sawah (Contoh: Sawah Blok Barat)" value={fieldName} onChange={e => setFieldName(e.target.value)} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-emerald-600" />
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-800 text-xs flex items-center gap-1">📍 Lokasi GPS Terkini</span>
                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">±1.2m Akurat</span>
               </div>
-              <p className="text-xs font-mono text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                Lat: {telemetry.lat.toFixed(6)}, Lon: {telemetry.lon.toFixed(6)}
-              </p>
+              <p className="text-xs font-mono text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">Lat: {telemetry.lat.toFixed(6)}, Lon: {telemetry.lon.toFixed(6)}</p>
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setPoints(prev => [...prev, { lat: telemetry.lat, lon: telemetry.lon }])}
-                  className="py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs"
-                >
-                  + Titik GPS Terkini
-                </button>
-                <button
-                  onClick={() => setWalkMapActive(!walkMapActive)}
-                  className={`py-2.5 border rounded-xl font-bold text-xs ${walkMapActive ? 'bg-emerald-100 border-emerald-600 text-emerald-800' : 'bg-white border-slate-200 text-slate-700'}`}
-                >
-                  {walkMapActive ? '🚶 Selesai Rekam' : '🚶 Walk & Map'}
-                </button>
+                <button onClick={() => setPoints(prev => [...prev, { lat: telemetry.lat, lon: telemetry.lon }])} className="py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs">+ Titik GPS Terkini</button>
+                <button onClick={() => setWalkMapActive(!walkMapActive)} className={`py-2.5 border rounded-xl font-bold text-xs ${walkMapActive ? 'bg-emerald-100 border-emerald-600 text-emerald-800' : 'bg-white border-slate-200 text-slate-700'}`}>{walkMapActive ? '🚶 Selesai Rekam' : '🚶 Walk & Map'}</button>
               </div>
             </div>
-
-            {/* Points List */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
-              <span className="text-xs font-bold text-slate-800 block">Daftar Titik Batas ({points.length} Titik):</span>
-              <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                {points.map((pt, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs font-mono bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <span>Titik {idx + 1}: {pt.lat.toFixed(6)}, {pt.lon.toFixed(6)}</span>
-                    <button onClick={() => setPoints(prev => prev.filter((_, i) => i !== idx))} className="text-rose-600 font-bold px-1.5">✕</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                if (!fieldName.trim()) return alert('Nama sawah wajib diisi!');
-                onSave({
-                  id: 'f_' + Date.now(),
-                  name: fieldName,
-                  areaM2: 1250,
-                  perimeterM: 140.0,
-                  boundary: points
-                });
-              }}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-extrabold text-base shadow-md"
-            >
-              Simpan Sawah
-            </button>
+            <button onClick={() => { if (!fieldName.trim()) return alert('Nama sawah wajib diisi!'); onSave({ id: 'f_' + Date.now(), name: fieldName, areaM2: 1250, perimeterM: 140.0, boundary: points }); }} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-extrabold text-base shadow-md">Simpan Sawah</button>
           </div>
         </div>
       );
     }
 
-    // --- SCREEN 8: HISTORY VIEW ---
     function HistoryView({ onBack }) {
       return (
         <div className="p-4 space-y-4">
@@ -977,25 +1066,15 @@
               </div>
               <p className="text-xs text-slate-500">27 Agustus 2026 • 1,722 m² tertanam (98%)</p>
             </div>
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-1">
-              <div className="flex justify-between">
-                <span className="font-bold text-slate-800 text-sm">Misi Sawah Timur #14</span>
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">SELESAI</span>
-              </div>
-              <p className="text-xs text-slate-500">25 Agustus 2026 • 890 m² tertanam (97%)</p>
-            </div>
           </div>
         </div>
       );
     }
 
-    // --- SCREEN 9: SETTINGS VIEW ---
     function SettingsView({ connectionMode, setConnectionMode, onBack }) {
       return (
         <div className="p-4 space-y-4">
           <h1 className="text-xl font-extrabold text-slate-900 pt-2">Pengaturan Aplikasi</h1>
-
-          {/* Theme card */}
           <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
             <h3 className="font-bold text-slate-800 text-sm">Tema Tampilan Aplikasi</h3>
             <div className="grid grid-cols-2 gap-2 pt-1">
@@ -1009,23 +1088,6 @@
                 <span className="text-xs font-bold text-slate-700 block mt-1">Versi Dark</span>
                 <span className="text-[10px] text-slate-500">Mode Malam</span>
               </div>
-            </div>
-          </div>
-
-          {/* Connection Mode */}
-          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
-            <h3 className="font-bold text-slate-800 text-sm">Mode Komunikasi Mesin</h3>
-            <div className="space-y-1.5 text-xs font-bold text-slate-700">
-              {['SIMULATOR', 'WIFI', 'BLUETOOTH', 'GSM'].map(m => (
-                <label key={m} className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                  <input
-                    type="radio" name="conn" checked={connectionMode === m}
-                    onChange={() => setConnectionMode(m)}
-                    className="accent-emerald-600"
-                  />
-                  <span>{m === 'SIMULATOR' ? '🧪 Simulator Virtual (Offline)' : m === 'WIFI' ? '📶 WiFi / ESP32 WebSocket' : m === 'BLUETOOTH' ? '🔵 Bluetooth HC-05' : '📡 GSM 4G (MQTT)'}</span>
-                </label>
-              ))}
             </div>
           </div>
         </div>
