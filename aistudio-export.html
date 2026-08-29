@@ -3,51 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>PadiBot - Smart Rice Planter App</title>
-  <!-- Tailwind CSS & React CDN -->
+  <title>PadiBot - Smart Rice Planter</title>
+  <!-- Tailwind CSS & React 18 CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              50: '#f4f9f0',
-              100: '#e6f2de',
-              200: '#cfe5bf',
-              300: '#aed297',
-              400: '#8cba6f',
-              500: '#689f48',
-              600: '#518136',
-              700: '#3f652c',
-              800: '#355126',
-              900: '#2d4422',
-            },
-            agriDark: '#172417',
-            agriSurface: '#1E2D1E',
-          },
-          fontFamily: {
-            sans: ['Plus Jakarta Sans', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          }
-        }
-      }
-    }
-  </script>
   <style>
     body {
-      background-color: #0d140d;
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #F8FAFC;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
     }
     .hide-scrollbar::-webkit-scrollbar {
       display: none;
@@ -58,268 +29,295 @@
     }
   </style>
 </head>
-<body class="flex justify-center items-center min-h-screen text-slate-100 p-0 sm:p-4">
-  <div id="root" class="w-full max-w-md bg-[#121c12] sm:rounded-3xl shadow-2xl overflow-hidden border border-emerald-900/50 flex flex-col min-h-screen sm:min-h-[844px] sm:max-h-[890px]"></div>
+<body class="bg-[#F8FAFC] text-slate-800 flex justify-center items-center min-h-screen p-0 sm:p-4">
+  <div id="root" class="w-full max-w-md bg-[#F8FAFC] min-h-screen sm:min-h-[880px] sm:h-[880px] sm:rounded-[36px] shadow-2xl overflow-hidden flex flex-col relative border border-slate-200"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useMemo } = React;
 
-    // ── INITIAL DATA & GEOMETRY UTILITIES ──────────────────────────────
+    // --- Mock Data & Models ---
     const INITIAL_FIELDS = [
       {
-        id: 'field-1',
-        name: 'Sawah Utama',
-        areaM2: 1240,
-        perimeterM: 142,
+        id: 'f1',
+        name: 'Sawah Utama Karawang',
+        areaM2: 1722,
+        perimeterM: 168.4,
         boundary: [
-          { lat: -6.20000, lon: 106.81666 },
-          { lat: -6.20035, lon: 106.81666 },
-          { lat: -6.20035, lon: 106.81702 },
-          { lat: -6.20000, lon: 106.81702 },
+          { lat: -6.923400, lon: 107.610000 },
+          { lat: -6.923380, lon: 107.610420 },
+          { lat: -6.923720, lon: 107.610440 },
+          { lat: -6.923740, lon: 107.610020 }
         ]
       },
       {
-        id: 'field-2',
-        name: 'Sawah Timur',
-        areaM2: 2450,
-        perimeterM: 198,
+        id: 'f2',
+        name: 'Sawah Blok Timur',
+        areaM2: 890,
+        perimeterM: 122.0,
         boundary: [
-          { lat: -6.20100, lon: 106.81800 },
-          { lat: -6.20160, lon: 106.81810 },
-          { lat: -6.20175, lon: 106.81860 },
-          { lat: -6.20120, lon: 106.81870 },
-          { lat: -6.20090, lon: 106.81830 },
+          { lat: -6.923200, lon: 107.610100 },
+          { lat: -6.923250, lon: 107.610450 },
+          { lat: -6.923550, lon: 107.610450 },
+          { lat: -6.923500, lon: 107.610100 }
         ]
       }
     ];
 
-    // ── MAIN APP COMPONENT ─────────────────────────────────────────────
-    function PadiBotApp() {
-      const [screen, setScreen] = useState('dashboard'); // dashboard, fields, fieldCreate, settings, plantingSettings, routePreview, execution, manualControl, history
-      const [fields, setFields] = useState(INITIAL_FIELDS);
-      const [selectedFieldId, setSelectedFieldId] = useState('field-1');
-      const [activeField, setActiveField] = useState(INITIAL_FIELDS[0]);
+    const PATTERNS = [
+      {
+        id: 'BOUSTROPHEDON',
+        title: '1. Persegi Panjang / Zig-Zag',
+        desc: 'Pola bolak-balik paralel standar paling efisien untuk petakan kotak',
+        emoji: '⚡'
+      },
+      {
+        id: 'HEADLAND_INNER',
+        title: '2. Dengan Headland (Area Putar)',
+        desc: 'Tanam area tengah terlebih dahulu, sisakan putaran di keliling pematang',
+        emoji: '🔄'
+      },
+      {
+        id: 'SPIRAL_INWARD',
+        title: '3. Oval / Spiral (Pinggir ke Tengah)',
+        desc: 'Memutar mengelilingi batas sawah dari luar menuju titik tengah',
+        emoji: '🌀'
+      },
+      {
+        id: 'SPIRAL_OUTWARD',
+        title: '4. Oval / Spiral (Tengah ke Pinggir)',
+        desc: 'Mulai dari pusat tengah sawah memutar membesar ke arah luar',
+        emoji: '💫'
+      }
+    ];
 
-      // Mission parameters
-      const [routePattern, setRoutePattern] = useState('BOUSTROPHEDON'); // BOUSTROPHEDON, HEADLAND_INNER, SPIRAL_INWARD, SPIRAL_OUTWARD
-      const [rowSpacingCm, setRowSpacingCm] = useState(30);
-      const [plantSpacingCm, setPlantSpacingCm] = useState(20);
-      const [machineWidthCm, setMachineWidthCm] = useState(120);
-      const [speedMps, setSpeedMps] = useState(0.8);
-      const [headlandWidthM, setHeadlandWidthM] = useState(1.5);
+    function App() {
+      const [currentScreen, setCurrentScreen] = useState('DASHBOARD');
+      const [fields, setFields] = useState(INITIAL_FIELDS);
+      const [selectedFieldId, setSelectedFieldId] = useState('f1');
+      const [pattern, setPattern] = useState('BOUSTROPHEDON');
+      const [machineWidth, setMachineWidth] = useState(1.5);
+      const [headlandWidth, setHeadlandWidth] = useState(3.0);
       const [orientationDeg, setOrientationDeg] = useState(0);
 
-      // Live Mission Execution State
-      const [missionStatus, setMissionStatus] = useState('READY'); // READY, RUNNING, PAUSED, COMPLETED, STOPPED
-      const [progressPct, setProgressPct] = useState(0);
-      const [elapsedSec, setElapsedSec] = useState(0);
-      const [tractorStep, setTractorStep] = useState(0);
-      const [batteryPct, setBatteryPct] = useState(82);
+      const [connectionMode, setConnectionMode] = useState('SIMULATOR');
+      const [telemetry, setTelemetry] = useState({
+        battery: 92,
+        speed: 0.00,
+        gpsStatus: 'GPS RTK',
+        accuracy: 1.2,
+        lat: -6.923500,
+        lon: 107.610200,
+        progress: 0,
+        currentLane: 0,
+        totalLanes: 18,
+        areaDone: 0,
+        areaRemaining: 1722
+      });
 
-      // Missions History
-      const [missions, setMissions] = useState([
-        {
-          id: 'm-1',
-          name: 'Misi Sawah Utama #27/8',
-          fieldName: 'Sawah Utama',
-          date: '27 Agu 2026, 08:15',
-          duration: '1 jam 32 mnt',
-          areaPlanted: '1.240 m²',
-          coveragePct: 98,
-          status: 'COMPLETED'
-        }
+      const [isMissionRunning, setIsMissionRunning] = useState(false);
+      const [isPaused, setIsPaused] = useState(false);
+      const [manualSpeed, setManualSpeed] = useState(50);
+      const [newFieldName, setNewFieldName] = useState('');
+      const [newFieldPoints, setNewFieldPoints] = useState([
+        { lat: -6.923400, lon: 107.610000 },
+        { lat: -6.923380, lon: 107.610420 },
+        { lat: -6.923720, lon: 107.610440 },
+        { lat: -6.923740, lon: 107.610020 }
       ]);
+      const [walkMapActive, setWalkMapActive] = useState(false);
 
-      // Keep active field updated
-      useEffect(() => {
-        const f = fields.find(item => item.id === selectedFieldId) || fields[0];
-        setActiveField(f);
-      }, [selectedFieldId, fields]);
+      const activeField = useMemo(() => {
+        return fields.find(f => f.id === selectedFieldId) || fields[0];
+      }, [fields, selectedFieldId]);
 
-      // Live Execution Timer and Tractor Simulation
+      // Simulation loop
       useEffect(() => {
-        let interval = null;
-        if (missionStatus === 'RUNNING') {
+        let interval;
+        if (isMissionRunning && !isPaused) {
           interval = setInterval(() => {
-            setElapsedSec(prev => prev + 1);
-            setTractorStep(prev => prev + 1);
-            setProgressPct(prev => {
-              if (prev >= 100) {
-                setMissionStatus('COMPLETED');
-                return 100;
+            setTelemetry(prev => {
+              const newProgress = Math.min(100, prev.progress + 1.5);
+              const done = Math.round((newProgress / 100) * (activeField.areaM2 || 1722));
+              const rem = Math.max(0, (activeField.areaM2 || 1722) - done);
+              const lane = Math.min(prev.totalLanes, Math.floor((newProgress / 100) * prev.totalLanes) + 1);
+
+              if (newProgress >= 100) {
+                setIsMissionRunning(false);
               }
-              return Math.min(100, prev + 1);
+
+              return {
+                ...prev,
+                progress: newProgress,
+                speed: 0.50,
+                battery: Math.max(15, prev.battery - 0.05),
+                currentLane: lane,
+                areaDone: done,
+                areaRemaining: rem
+              };
             });
-            if (elapsedSec % 60 === 0) {
-              setBatteryPct(prev => Math.max(10, prev - 1));
-            }
-          }, 600);
+          }, 1000);
+        } else if (!isMissionRunning) {
+          setTelemetry(prev => ({ ...prev, speed: 0.00 }));
         }
         return () => clearInterval(interval);
-      }, [missionStatus, elapsedSec]);
+      }, [isMissionRunning, isPaused, activeField]);
 
-      const formatTimer = (sec) => {
-        const m = Math.floor(sec / 60);
-        const s = sec % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-      };
-
-      // ── SCREEN ROUTER ────────────────────────────────────────────────
       return (
-        <div className="flex flex-col h-full bg-[#121c12]">
+        <div className="flex flex-col h-full bg-[#F8FAFC] relative select-none">
           {/* Main Content Area */}
-          <div className="flex-1 overflow-y-auto hide-scrollbar">
-            {screen === 'dashboard' && (
-              <DashboardScreen
-                fields={fields}
+          <div className="flex-1 overflow-y-auto hide-scrollbar pb-20">
+            {currentScreen === 'DASHBOARD' && (
+              <DashboardView
                 activeField={activeField}
+                fields={fields}
+                telemetry={telemetry}
+                onStartMission={() => setCurrentScreen('PLANTING_SETTINGS')}
+                onManualControl={() => setCurrentScreen('MANUAL_CONTROL')}
+                onOpenFields={() => setCurrentScreen('FIELD_LIST')}
+                onSelectFieldId={setSelectedFieldId}
+              />
+            )}
+
+            {currentScreen === 'PLANTING_SETTINGS' && (
+              <PlantingSettingsView
+                activeField={activeField}
+                fields={fields}
                 selectedFieldId={selectedFieldId}
                 setSelectedFieldId={setSelectedFieldId}
-                batteryPct={batteryPct}
-                onStartMission={() => setScreen('plantingSettings')}
-                onManualControl={() => setScreen('manualControl')}
-                onViewHistory={() => setScreen('history')}
-                onNavigate={(s) => setScreen(s)}
-              />
-            )}
-
-            {screen === 'plantingSettings' && (
-              <PlantingSettingsScreen
-                fields={fields}
-                selectedField={activeField}
-                selectedFieldId={selectedFieldId}
-                onSelectField={setSelectedFieldId}
-                routePattern={routePattern}
-                setRoutePattern={setRoutePattern}
-                rowSpacingCm={rowSpacingCm}
-                setRowSpacingCm={setRowSpacingCm}
-                plantSpacingCm={plantSpacingCm}
-                setPlantSpacingCm={setPlantSpacingCm}
-                machineWidthCm={machineWidthCm}
-                setMachineWidthCm={setMachineWidthCm}
-                speedMps={speedMps}
-                setSpeedMps={setSpeedMps}
-                headlandWidthM={headlandWidthM}
-                setHeadlandWidthM={setHeadlandWidthM}
+                pattern={pattern}
+                setPattern={setPattern}
+                machineWidth={machineWidth}
+                setMachineWidth={setMachineWidth}
+                headlandWidth={headlandWidth}
+                setHeadlandWidth={setHeadlandWidth}
                 orientationDeg={orientationDeg}
                 setOrientationDeg={setOrientationDeg}
-                onGenerate={() => setScreen('routePreview')}
-                onBack={() => setScreen('dashboard')}
+                onNext={() => setCurrentScreen('ROUTE_PREVIEW')}
+                onBack={() => setCurrentScreen('DASHBOARD')}
               />
             )}
 
-            {screen === 'routePreview' && (
-              <RoutePreviewScreen
-                field={activeField}
-                routePattern={routePattern}
-                machineWidthCm={machineWidthCm}
-                headlandWidthM={headlandWidthM}
+            {currentScreen === 'ROUTE_PREVIEW' && (
+              <RoutePreviewView
+                activeField={activeField}
+                pattern={pattern}
+                machineWidth={machineWidth}
+                headlandWidth={headlandWidth}
                 orientationDeg={orientationDeg}
                 onApprove={() => {
-                  setProgressPct(0);
-                  setElapsedSec(0);
-                  setTractorStep(0);
-                  setMissionStatus('READY');
-                  setScreen('execution');
+                  setTelemetry(prev => ({ ...prev, progress: 0, areaDone: 0, areaRemaining: activeField.areaM2 }));
+                  setIsMissionRunning(true);
+                  setIsPaused(false);
+                  setCurrentScreen('EXECUTION');
                 }}
-                onBack={() => setScreen('plantingSettings')}
+                onBack={() => setCurrentScreen('PLANTING_SETTINGS')}
               />
             )}
 
-            {screen === 'execution' && (
-              <ExecutionScreen
-                field={activeField}
-                routePattern={routePattern}
-                status={missionStatus}
-                progressPct={progressPct}
-                elapsedSec={elapsedSec}
-                tractorStep={tractorStep}
-                batteryPct={batteryPct}
-                speedMps={speedMps}
-                formatTimer={formatTimer}
-                onStart={() => setMissionStatus('RUNNING')}
-                onPause={() => setMissionStatus('PAUSED')}
-                onResume={() => setMissionStatus('RUNNING')}
-                onStop={() => setMissionStatus('STOPPED')}
-                onEmergencyStop={() => setMissionStatus('STOPPED')}
-                onExit={() => setScreen('dashboard')}
-                onFinish={() => setScreen('history')}
+            {currentScreen === 'EXECUTION' && (
+              <ExecutionView
+                activeField={activeField}
+                pattern={pattern}
+                telemetry={telemetry}
+                isMissionRunning={isMissionRunning}
+                isPaused={isPaused}
+                onPause={() => setIsPaused(true)}
+                onResume={() => setIsPaused(false)}
+                onStop={() => {
+                  setIsMissionRunning(false);
+                  setCurrentScreen('DASHBOARD');
+                }}
+                onEmergencyStop={() => {
+                  setIsMissionRunning(false);
+                  alert('⚠️ BERHENTI DARURAT DIAKTIFKAN!');
+                  setCurrentScreen('DASHBOARD');
+                }}
+                onBack={() => setCurrentScreen('DASHBOARD')}
               />
             )}
 
-            {screen === 'manualControl' && (
-              <ManualControlScreen onBack={() => setScreen('dashboard')} />
+            {currentScreen === 'MANUAL_CONTROL' && (
+              <ManualControlView
+                telemetry={telemetry}
+                manualSpeed={manualSpeed}
+                setManualSpeed={setManualSpeed}
+                onClose={() => setCurrentScreen('DASHBOARD')}
+              />
             )}
 
-            {screen === 'fields' && (
-              <FieldsListScreen
+            {currentScreen === 'FIELD_LIST' && (
+              <FieldListView
                 fields={fields}
-                onSelectField={(id) => { setSelectedFieldId(id); setScreen('dashboard'); }}
-                onCreateNew={() => setScreen('fieldCreate')}
-                onBack={() => setScreen('dashboard')}
-              />
-            )}
-
-            {screen === 'fieldCreate' && (
-              <FieldCreateScreen
-                onSave={(newField) => {
-                  setFields([...fields, newField]);
-                  setSelectedFieldId(newField.id);
-                  setScreen('fields');
+                selectedFieldId={selectedFieldId}
+                onSelect={(id) => {
+                  setSelectedFieldId(id);
+                  setCurrentScreen('DASHBOARD');
                 }}
-                onBack={() => setScreen('fields')}
+                onAddNew={() => setCurrentScreen('FIELD_CREATE')}
+                onBack={() => setCurrentScreen('DASHBOARD')}
               />
             )}
 
-            {screen === 'history' && (
-              <HistoryScreen missions={missions} onBack={() => setScreen('dashboard')} />
+            {currentScreen === 'FIELD_CREATE' && (
+              <FieldCreateView
+                fieldName={newFieldName}
+                setFieldName={setNewFieldName}
+                points={newFieldPoints}
+                setPoints={setNewFieldPoints}
+                walkMapActive={walkMapActive}
+                setWalkMapActive={setWalkMapActive}
+                telemetry={telemetry}
+                onSave={(field) => {
+                  setFields(prev => [field, ...prev]);
+                  setSelectedFieldId(field.id);
+                  setCurrentScreen('DASHBOARD');
+                }}
+                onBack={() => setCurrentScreen('FIELD_LIST')}
+              />
             )}
 
-            {screen === 'settings' && (
-              <SettingsScreen onBack={() => setScreen('dashboard')} />
+            {currentScreen === 'HISTORY' && (
+              <HistoryView onBack={() => setCurrentScreen('DASHBOARD')} />
+            )}
+
+            {currentScreen === 'SETTINGS' && (
+              <SettingsView
+                connectionMode={connectionMode}
+                setConnectionMode={setConnectionMode}
+                onBack={() => setCurrentScreen('DASHBOARD')}
+              />
             )}
           </div>
 
-          {/* Bottom Tab Bar (Visible on primary screens) */}
-          {['dashboard', 'fields', 'history', 'settings'].includes(screen) && (
-            <div className="bg-[#172417] border-t border-emerald-950/80 px-4 py-2 flex justify-around items-center">
+          {/* Bottom Navigation Bar */}
+          {['DASHBOARD', 'FIELD_LIST', 'HISTORY', 'SETTINGS'].includes(currentScreen) && (
+            <div className="absolute bottom-0 inset-x-0 bg-white border-t border-slate-200 px-6 py-2.5 flex justify-between items-center z-30 shadow-lg">
               <button
-                onClick={() => setScreen('dashboard')}
-                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
-                  screen === 'dashboard' ? 'text-emerald-400 font-bold bg-emerald-950/60' : 'text-slate-400'
-                }`}
+                onClick={() => setCurrentScreen('DASHBOARD')}
+                className={`flex flex-col items-center gap-1 ${currentScreen === 'DASHBOARD' ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}
               >
-                <span className="text-lg">🏠</span>
+                <span className="text-xl">🏠</span>
                 <span className="text-[11px]">Beranda</span>
               </button>
-
               <button
-                onClick={() => setScreen('fields')}
-                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
-                  screen === 'fields' ? 'text-emerald-400 font-bold bg-emerald-950/60' : 'text-slate-400'
-                }`}
+                onClick={() => setCurrentScreen('FIELD_LIST')}
+                className={`flex flex-col items-center gap-1 ${currentScreen === 'FIELD_LIST' ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}
               >
-                <span className="text-lg">🌾</span>
-                <span className="text-[11px]">Sawah</span>
+                <span className="text-xl">🌾</span>
+                <span className="text-[11px]">Pemetaan</span>
               </button>
-
               <button
-                onClick={() => setScreen('history')}
-                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
-                  screen === 'history' ? 'text-emerald-400 font-bold bg-emerald-950/60' : 'text-slate-400'
-                }`}
+                onClick={() => setCurrentScreen('HISTORY')}
+                className={`flex flex-col items-center gap-1 ${currentScreen === 'HISTORY' ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}
               >
-                <span className="text-lg">📊</span>
-                <span className="text-[11px]">Riwayat</span>
+                <span className="text-xl">📊</span>
+                <span className="text-[11px]">Laporan</span>
               </button>
-
               <button
-                onClick={() => setScreen('settings')}
-                className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
-                  screen === 'settings' ? 'text-emerald-400 font-bold bg-emerald-950/60' : 'text-slate-400'
-                }`}
+                onClick={() => setCurrentScreen('SETTINGS')}
+                className={`flex flex-col items-center gap-1 ${currentScreen === 'SETTINGS' ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}
               >
-                <span className="text-lg">⚙️</span>
+                <span className="text-xl">⚙️</span>
                 <span className="text-[11px]">Pengaturan</span>
               </button>
             </div>
@@ -328,922 +326,713 @@
       );
     }
 
-    // ── SCREEN 1: DASHBOARD ───────────────────────────────────────────
-    function DashboardScreen({ fields, activeField, selectedFieldId, setSelectedFieldId, batteryPct, onStartMission, onManualControl, onViewHistory, onNavigate }) {
+    // --- SCREEN 1: DASHBOARD VIEW (LIGHT THEME MATCHING AI STUDIO) ---
+    function DashboardView({ activeField, fields, telemetry, onStartMission, onManualControl, onOpenFields, onSelectFieldId }) {
       return (
         <div className="p-4 space-y-4">
           {/* Top Header */}
-          <div className="flex justify-between items-center bg-[#1A2A1A] p-3.5 rounded-2xl border border-emerald-900/40">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center text-xl">
-                🤖
-              </div>
-              <div>
-                <h1 className="font-extrabold text-base tracking-tight text-white">Smart Rice Planter</h1>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span className="text-[11px] font-semibold text-emerald-400">Connected (WiFi / ESP32)</span>
-                </div>
-              </div>
+          <div className="flex justify-between items-center pt-2">
+            <div>
+              <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">PadiBot</h1>
+              <p className="text-xs text-slate-500">Tanam Cerdas, Panen Lebih 🌾</p>
             </div>
-            <span className="text-xs bg-emerald-900/60 text-emerald-300 font-bold px-2.5 py-1 rounded-lg border border-emerald-700/40">
-              v1.4
-            </span>
-          </div>
-
-          {/* Machine Telemetry Quick Cards */}
-          <div className="grid grid-cols-4 gap-2">
-            <div className="bg-[#182618] p-2.5 rounded-xl border border-emerald-900/40 text-center">
-              <div className="text-xs text-slate-400 font-medium">Baterai</div>
-              <div className="text-base font-extrabold text-emerald-400 mt-0.5">{batteryPct}%</div>
-            </div>
-            <div className="bg-[#182618] p-2.5 rounded-xl border border-emerald-900/40 text-center">
-              <div className="text-xs text-slate-400 font-medium">GPS</div>
-              <div className="text-base font-extrabold text-emerald-400 mt-0.5">RTK</div>
-            </div>
-            <div className="bg-[#182618] p-2.5 rounded-xl border border-emerald-900/40 text-center">
-              <div className="text-xs text-slate-400 font-medium">Kecepatan</div>
-              <div className="text-base font-extrabold text-white mt-0.5">0.8 <span className="text-[10px]">m/s</span></div>
-            </div>
-            <div className="bg-[#182618] p-2.5 rounded-xl border border-emerald-900/40 text-center">
-              <div className="text-xs text-slate-400 font-medium">Mode</div>
-              <div className="text-base font-extrabold text-amber-400 mt-0.5">AUTO</div>
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Simulator Aktif</span>
             </div>
           </div>
 
-          {/* Active Field Card */}
-          <div className="bg-gradient-to-br from-[#1b2b1b] to-[#142014] p-4 rounded-2xl border border-emerald-800/40 shadow-lg relative overflow-hidden">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Sawah Terpilih</span>
-                <h2 className="text-xl font-extrabold text-white mt-1">{activeField?.name}</h2>
-                <p className="text-xs text-slate-300 mt-1 font-medium">
-                  {activeField?.areaM2} m² luas • {activeField?.boundary.length} titik batas
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('fields')}
-                className="bg-emerald-800/40 hover:bg-emerald-800/60 text-emerald-300 text-xs font-bold py-1.5 px-3 rounded-xl border border-emerald-600/40 transition"
-              >
-                Ganti 🔄
-              </button>
+          {/* Hero Banner */}
+          <div className="relative rounded-2xl overflow-hidden shadow-sm border border-slate-200 aspect-[16/8]">
+            <img
+              src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80"
+              alt="Rice Field Banner"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent flex flex-col justify-end p-4 text-white">
+              <h2 className="text-lg font-bold">PadiBot Smart Planter</h2>
+              <p className="text-xs text-slate-200">Presisi Penanaman Bibit Padi Otomatis & Efisien</p>
             </div>
           </div>
 
-          {/* Quick Action Buttons */}
-          <div className="space-y-2.5 pt-1">
-            <button
-              onClick={onStartMission}
-              className="w-full py-4 px-4 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-emerald-950 font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2 transition"
-            >
-              <span className="text-xl">🌾</span> MULAI MISI BARU
-            </button>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                onClick={onManualControl}
-                className="py-3 px-3 bg-[#1e2e1e] hover:bg-[#253925] border border-emerald-800/50 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition"
-              >
-                <span>🕹️</span> Kontrol Manual
-              </button>
-
-              <button
-                onClick={() => onNavigate('fields')}
-                className="py-3 px-3 bg-[#1e2e1e] hover:bg-[#253925] border border-emerald-800/50 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition"
-              >
-                <span>🗺️</span> Pemetaan Sawah
-              </button>
-            </div>
-          </div>
-
-          {/* Last Mission Summary */}
-          <div className="bg-[#182618] p-3.5 rounded-2xl border border-emerald-900/40">
+          {/* Status Mesin Tanam Card */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-400">Riwayat Terakhir</span>
-              <span className="text-[10px] bg-emerald-950 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-800/40">SELESAI</span>
+              <h3 className="font-bold text-slate-800 text-sm">Status Mesin Tanam</h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold font-mono">
+                {telemetry.gpsStatus} (±{telemetry.accuracy}m)
+              </span>
             </div>
-            <div className="mt-2 text-sm font-bold text-white">Misi Sawah Utama #27/8</div>
-            <div className="text-xs text-slate-400 mt-0.5">1.240 m² tertanam • Cakupan 98%</div>
+
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                <span className="text-lg text-emerald-600 block">🔋</span>
+                <span className="text-base font-extrabold text-slate-900 block mt-0.5">{telemetry.battery}%</span>
+                <span className="text-[10px] text-slate-500">Baterai Mesin</span>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                <span className="text-lg text-sky-600 block">⚡</span>
+                <span className="text-base font-extrabold text-slate-900 block mt-0.5">{telemetry.speed.toFixed(2)} m/s</span>
+                <span className="text-[10px] text-slate-500">Kecepatan</span>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                <span className="text-lg text-amber-600 block">📶</span>
+                <span className="text-base font-extrabold text-slate-900 block mt-0.5">Simulator</span>
+                <span className="text-[10px] text-slate-500">Mode Komunikasi</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sawah Aktif Card */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
+                <span>🌾</span>
+                <span>Sawah Aktif</span>
+              </div>
+              <button onClick={onOpenFields} className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                Ganti Sawah →
+              </button>
+            </div>
+
+            <div>
+              <h4 className="text-base font-extrabold text-slate-900">{activeField.name}</h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                📐 Luas: <span className="font-bold text-emerald-700">{activeField.areaM2} m²</span> • 📍 {activeField.boundary.length} Titik Batas
+              </p>
+            </div>
+
+            {/* Map Preview Graphic */}
+            <div className="relative bg-[#1E2D1E] rounded-xl overflow-hidden h-36 border border-emerald-900/30 flex items-center justify-center p-3">
+              <svg viewBox="0 0 300 140" className="w-full h-full">
+                <polygon points="40,20 260,30 240,120 60,110" fill="#00E676" fillOpacity="0.2" stroke="#00E676" strokeWidth="2.5" />
+                <line x1="60" y1="45" x2="240" y2="48" stroke="#00E676" strokeWidth="1.5" strokeDasharray="3 3" />
+                <line x1="60" y1="70" x2="240" y2="73" stroke="#00E676" strokeWidth="1.5" strokeDasharray="3 3" />
+                <line x1="60" y1="95" x2="240" y2="98" stroke="#00E676" strokeWidth="1.5" strokeDasharray="3 3" />
+                <circle cx="40" cy="20" r="5" fill="#10B981" />
+                <text x="48" y="24" fill="#FFFFFF" fontSize="9" fontWeight="bold">START</text>
+                <circle cx="60" cy="110" r="5" fill="#EF4444" />
+                <text x="68" y="114" fill="#FFFFFF" fontSize="9" fontWeight="bold">END</text>
+              </svg>
+            </div>
+          </div>
+
+          {/* Big Green Start Mission Button */}
+          <button
+            onClick={onStartMission}
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-extrabold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 active:scale-[0.99] transition-all"
+          >
+            <span>🌾</span>
+            <span>MULAI MISI BARU</span>
+          </button>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={onManualControl}
+              className="py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
+            >
+              <span>🕹️</span>
+              <span>Kontrol Manual</span>
+            </button>
+            <button
+              onClick={onOpenFields}
+              className="py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
+            >
+              <span>🗺️</span>
+              <span>Peta Sawah</span>
+            </button>
+          </div>
+
+          {/* Last Mission Card */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="text-[11px] font-semibold text-slate-500">Misi Terakhir</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">SELESAI</span>
+            </div>
+            <h5 className="font-bold text-slate-800 text-sm">Misi Penanaman Ciherang #1</h5>
+            <p className="text-xs text-slate-500">Cakupan: 96.5% • 22 Jalur • 18 Menit</p>
           </div>
         </div>
       );
     }
 
-    // ── SCREEN 2: PLANTING SETTINGS ───────────────────────────────────
-    function PlantingSettingsScreen({
-      fields, selectedField, selectedFieldId, onSelectField,
-      routePattern, setRoutePattern,
-      rowSpacingCm, setRowSpacingCm,
-      plantSpacingCm, setPlantSpacingCm,
-      machineWidthCm, setMachineWidthCm,
-      speedMps, setSpeedMps,
-      headlandWidthM, setHeadlandWidthM,
-      orientationDeg, setOrientationDeg,
-      onGenerate, onBack
+    // --- SCREEN 2: PLANTING SETTINGS VIEW ---
+    function PlantingSettingsView({
+      activeField, fields, selectedFieldId, setSelectedFieldId,
+      pattern, setPattern, machineWidth, setMachineWidth,
+      headlandWidth, setHeadlandWidth, orientationDeg, setOrientationDeg,
+      onNext, onBack
     }) {
       return (
-        <div className="p-4 space-y-4 pb-12">
-          {/* Header */}
-          <div className="flex items-center gap-3">
-            <button onClick={onBack} className="w-9 h-9 rounded-xl bg-[#1c2b1c] flex items-center justify-center text-slate-300 font-bold">
+        <div className="p-4 space-y-4">
+          <div className="flex items-center gap-3 pt-2">
+            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
               ←
             </button>
-            <h1 className="text-lg font-extrabold text-white">Pengaturan Tanam</h1>
+            <div>
+              <h1 className="text-xl font-extrabold text-slate-900">Pengaturan Tanam</h1>
+              <p className="text-xs text-slate-500">Langkah 1 dari 3: Konfigurasi Lintasan</p>
+            </div>
           </div>
 
-          {/* 1. Field Selector Carousel */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-slate-300">🌾 Sawah yang Dipilih</span>
-            </div>
+          {/* 1. Field Selector */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-700 block">Pilih Sawah yang Dikerjakan:</label>
             <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
               {fields.map(f => {
                 const isSelected = f.id === selectedFieldId;
                 return (
                   <div
                     key={f.id}
-                    onClick={() => onSelectField(f.id)}
-                    className={`min-w-[160px] p-3 rounded-2xl border cursor-pointer transition ${
-                      isSelected
-                        ? 'bg-[#203320] border-emerald-500 shadow-md'
-                        : 'bg-[#162216] border-emerald-950'
-                    }`}
+                    onClick={() => setSelectedFieldId(f.id)}
+                    className={`min-w-[180px] p-3 rounded-2xl border cursor-pointer transition-all ${isSelected ? 'bg-emerald-50 border-emerald-600 shadow-sm' : 'bg-white border-slate-200'}`}
                   >
                     <div className="flex justify-between items-center">
-                      <span className="text-xl">🌾</span>
-                      {isSelected && <span className="text-[10px] bg-emerald-500 text-emerald-950 font-extrabold px-1.5 py-0.5 rounded">✓ AKTIF</span>}
+                      <span className="font-bold text-xs text-slate-900 truncate">{f.name}</span>
+                      {isSelected && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-600 text-white rounded font-bold">Aktif</span>}
                     </div>
-                    <div className="font-extrabold text-sm text-white mt-2">{f.name}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">{f.areaM2} m² • {f.boundary.length} titik</div>
+                    <p className="text-[11px] text-slate-500 mt-1">{f.areaM2} m² • {f.boundary.length} Titik</p>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* 2. Route Pattern Selector (4 Options) */}
-          <div>
-            <span className="text-xs font-bold text-slate-300">🛣️ Pola Jalur Tanam (Coverage Path Planning)</span>
-            <div className="space-y-2 mt-2">
-              {/* Pattern 1 */}
-              <div
-                onClick={() => setRoutePattern('BOUSTROPHEDON')}
-                className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between transition ${
-                  routePattern === 'BOUSTROPHEDON' ? 'bg-[#203320] border-emerald-500' : 'bg-[#162216] border-emerald-950'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">⚡</span>
-                  <div>
-                    <div className="font-extrabold text-sm text-white">1. Persegi Panjang / Zig-Zag</div>
-                    <div className="text-[11px] text-slate-400">Pola paralel bolak-balik standar & paling cepat</div>
+          {/* 2. Route Pattern Selection (4 Options) */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+            <h3 className="font-bold text-slate-900 text-sm">Pola Jalur Tanam (Coverage Path)</h3>
+            <div className="space-y-2">
+              {PATTERNS.map(p => {
+                const isSelected = p.id === pattern;
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => setPattern(p.id)}
+                    className={`p-3 rounded-xl border cursor-pointer flex items-start gap-3 transition-all ${isSelected ? 'bg-emerald-50 border-emerald-600 ring-1 ring-emerald-600' : 'bg-slate-50 border-slate-200'}`}
+                  >
+                    <input type="radio" checked={isSelected} readOnly className="mt-1 accent-emerald-600" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">{p.emoji} {p.title}</h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{p.desc}</p>
+                    </div>
                   </div>
-                </div>
-                {routePattern === 'BOUSTROPHEDON' && <span className="text-emerald-400 font-extrabold text-lg">✓</span>}
-              </div>
-
-              {/* Pattern 2 */}
-              <div
-                onClick={() => setRoutePattern('HEADLAND_INNER')}
-                className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between transition ${
-                  routePattern === 'HEADLAND_INNER' ? 'bg-[#203320] border-emerald-500' : 'bg-[#162216] border-emerald-950'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">🔄</span>
-                  <div>
-                    <div className="font-extrabold text-sm text-white">2. Dengan Headland (Area Putar)</div>
-                    <div className="text-[11px] text-slate-400">Tanam area tengah dulu, sisakan putaran di keliling ujung</div>
-                  </div>
-                </div>
-                {routePattern === 'HEADLAND_INNER' && <span className="text-emerald-400 font-extrabold text-lg">✓</span>}
-              </div>
-
-              {/* Pattern 3 */}
-              <div
-                onClick={() => setRoutePattern('SPIRAL_INWARD')}
-                className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between transition ${
-                  routePattern === 'SPIRAL_INWARD' ? 'bg-[#203320] border-emerald-500' : 'bg-[#162216] border-emerald-950'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">🌀</span>
-                  <div>
-                    <div className="font-extrabold text-sm text-white">3. Oval / Spiral (Pinggir ke Tengah)</div>
-                    <div className="text-[11px] text-slate-400">Memutar mengelilingi batas sawah masuk menuju pusat</div>
-                  </div>
-                </div>
-                {routePattern === 'SPIRAL_INWARD' && <span className="text-emerald-400 font-extrabold text-lg">✓</span>}
-              </div>
-
-              {/* Pattern 4 */}
-              <div
-                onClick={() => setRoutePattern('SPIRAL_OUTWARD')}
-                className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between transition ${
-                  routePattern === 'SPIRAL_OUTWARD' ? 'bg-[#203320] border-emerald-500' : 'bg-[#162216] border-emerald-950'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">💫</span>
-                  <div>
-                    <div className="font-extrabold text-sm text-white">4. Oval / Spiral (Tengah ke Pinggir)</div>
-                    <div className="text-[11px] text-slate-400">Mulai dari titik pusat tengah memutar ke arah luar</div>
-                  </div>
-                </div>
-                {routePattern === 'SPIRAL_OUTWARD' && <span className="text-emerald-400 font-extrabold text-lg">✓</span>}
-              </div>
+                );
+              })}
             </div>
 
-            {/* Dynamic Diagram Preview Component */}
-            <div className="mt-3 p-3 bg-[#172517] rounded-2xl border border-emerald-900/60">
-              <div className="text-xs font-bold text-emerald-400 mb-2 flex items-center gap-1.5">
-                <span>📷</span> Skema Alur Jalur ({routePattern.replace('_', ' ')}):
+            {/* Dynamic Visual Schematic Diagram */}
+            <div className="bg-[#1E2D1E] rounded-xl p-3 border border-emerald-950 text-white space-y-2">
+              <div className="flex justify-between items-center text-[10px] font-mono">
+                <span className="text-emerald-400 font-bold">● START (Masuk)</span>
+                <span className="text-rose-400 font-bold">■ END (Keluar)</span>
               </div>
-              <SVGPatternDiagram pattern={routePattern} />
-            </div>
-          </div>
-
-          {/* 3. Parameter Form */}
-          <div className="bg-[#182618] p-4 rounded-2xl border border-emerald-900/40 space-y-3">
-            <span className="text-xs font-bold text-white uppercase tracking-wider">⚙️ Parameter Mesin & Tanam</span>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">Jarak Antar Baris</label>
-                <div className="flex items-center bg-[#121c12] rounded-xl border border-emerald-900 px-3 py-2">
-                  <input
-                    type="number"
-                    value={rowSpacingCm}
-                    onChange={e => setRowSpacingCm(Number(e.target.value))}
-                    className="w-full bg-transparent font-extrabold text-white text-sm outline-none"
-                  />
-                  <span className="text-xs text-slate-400">cm</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">Jarak Antar Tanaman</label>
-                <div className="flex items-center bg-[#121c12] rounded-xl border border-emerald-900 px-3 py-2">
-                  <input
-                    type="number"
-                    value={plantSpacingCm}
-                    onChange={e => setPlantSpacingCm(Number(e.target.value))}
-                    className="w-full bg-transparent font-extrabold text-white text-sm outline-none"
-                  />
-                  <span className="text-xs text-slate-400">cm</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">Lebar Mesin Kerja</label>
-                <div className="flex items-center bg-[#121c12] rounded-xl border border-emerald-900 px-3 py-2">
-                  <input
-                    type="number"
-                    value={machineWidthCm}
-                    onChange={e => setMachineWidthCm(Number(e.target.value))}
-                    className="w-full bg-transparent font-extrabold text-white text-sm outline-none"
-                  />
-                  <span className="text-xs text-slate-400">cm</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">Kecepatan</label>
-                <div className="flex items-center bg-[#121c12] rounded-xl border border-emerald-900 px-3 py-2">
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={speedMps}
-                    onChange={e => setSpeedMps(Number(e.target.value))}
-                    className="w-full bg-transparent font-extrabold text-white text-sm outline-none"
-                  />
-                  <span className="text-xs text-slate-400">m/s</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-semibold text-slate-300 block mb-1">Area Putar (Headland)</label>
-              <div className="flex items-center bg-[#121c12] rounded-xl border border-emerald-900 px-3 py-2">
-                <input
-                  type="number"
-                  step="0.5"
-                  value={headlandWidthM}
-                  onChange={e => setHeadlandWidthM(Number(e.target.value))}
-                  className="w-full bg-transparent font-extrabold text-white text-sm outline-none"
-                />
-                <span className="text-xs text-slate-400">meter</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Orientation Angle Selection */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-slate-300">Orientasi Jalur: <b className="text-emerald-400">{orientationDeg}°</b></span>
-              <button
-                onClick={() => setOrientationDeg(0)}
-                className="text-[11px] font-bold text-emerald-400 bg-emerald-950 px-2 py-1 rounded-lg border border-emerald-800/40"
-              >
-                ⚡ Otomatis
-              </button>
-            </div>
-            <div className="grid grid-cols-5 gap-1.5">
-              {[0, 45, 90, 135, 180].map(deg => (
-                <button
-                  key={deg}
-                  onClick={() => setOrientationDeg(deg)}
-                  className={`py-2 rounded-xl text-xs font-bold transition ${
-                    orientationDeg === deg ? 'bg-emerald-500 text-emerald-950' : 'bg-[#182618] text-slate-300 border border-emerald-950'
-                  }`}
-                >
-                  {deg}°
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Generate Button */}
-          <button
-            onClick={onGenerate}
-            className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-emerald-950 font-extrabold text-base rounded-2xl shadow-lg transition"
-          >
-            GENERATE JALUR →
-          </button>
-        </div>
-      );
-    }
-
-    // ── SCREEN 3: ROUTE PREVIEW ───────────────────────────────────────
-    function RoutePreviewScreen({ field, routePattern, machineWidthCm, headlandWidthM, orientationDeg, onApprove, onBack }) {
-      return (
-        <div className="p-4 space-y-4 pb-8">
-          <div className="flex items-center gap-3">
-            <button onClick={onBack} className="w-9 h-9 rounded-xl bg-[#1c2b1c] flex items-center justify-center text-slate-300 font-bold">
-              ←
-            </button>
-            <h1 className="text-lg font-extrabold text-white">Preview Jalur Otomatis</h1>
-          </div>
-
-          {/* Field & Pattern Badge */}
-          <div className="bg-[#182618] p-3.5 rounded-2xl border border-emerald-900/40 flex justify-between items-center">
-            <div>
-              <div className="font-extrabold text-white text-base">{field.name}</div>
-              <div className="text-xs text-emerald-400 font-semibold mt-0.5">
-                {routePattern === 'BOUSTROPHEDON' && '⚡ 1. Persegi Panjang / Zig-Zag'}
-                {routePattern === 'HEADLAND_INNER' && '🔄 2. Dengan Headland Area Putar'}
-                {routePattern === 'SPIRAL_INWARD' && '🌀 3. Oval / Spiral (Pinggir ke Tengah)'}
-                {routePattern === 'SPIRAL_OUTWARD' && '💫 4. Oval / Spiral (Tengah ke Pinggir)'}
-              </div>
-            </div>
-            <span className="text-xs text-slate-400 font-bold bg-emerald-950 px-2 py-1 rounded-lg">
-              {orientationDeg}°
-            </span>
-          </div>
-
-          {/* Main Route Map Canvas */}
-          <div className="w-full h-80 bg-[#172517] rounded-3xl border-2 border-emerald-800/60 overflow-hidden relative shadow-inner">
-            <RouteMapCanvas pattern={routePattern} />
-          </div>
-
-          {/* Estimation Metrics Strip */}
-          <div className="grid grid-cols-3 gap-2 bg-[#182618] p-3.5 rounded-2xl border border-emerald-900/40 text-center">
-            <div>
-              <div className="text-lg font-extrabold text-white">18</div>
-              <div className="text-[11px] text-slate-400">Total Jalur</div>
-            </div>
-            <div className="border-x border-emerald-900/60">
-              <div className="text-lg font-extrabold text-white">1.120 m</div>
-              <div className="text-[11px] text-slate-400">Total Jarak</div>
-            </div>
-            <div>
-              <div className="text-lg font-extrabold text-emerald-400">98%</div>
-              <div className="text-[11px] text-slate-400">Estimasi Cakupan</div>
-            </div>
-          </div>
-
-          {/* Approve Action */}
-          <button
-            onClick={onApprove}
-            className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-emerald-950 font-extrabold text-base rounded-2xl shadow-lg transition"
-          >
-            ✓ APPROVE & LANJUTKAN
-          </button>
-        </div>
-      );
-    }
-
-    // ── SCREEN 4: EXECUTION SCREEN (MODE OTOMATIS) ─────────────────────
-    function ExecutionScreen({
-      field, routePattern, status, progressPct, elapsedSec, tractorStep, batteryPct, speedMps, formatTimer,
-      onStart, onPause, onResume, onStop, onEmergencyStop, onExit, onFinish
-    }) {
-      return (
-        <div className="p-4 flex flex-col h-full justify-between pb-6">
-          <div className="space-y-3">
-            {/* Top Status Header */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2 bg-[#172517] px-3 py-1.5 rounded-xl border border-emerald-900">
-                <span className={`w-2.5 h-2.5 rounded-full ${status === 'RUNNING' ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
-                <span className="text-xs font-extrabold tracking-wider text-emerald-300">
-                  {status === 'RUNNING' ? 'AUTO RUNNING' : status === 'PAUSED' ? 'PAUSED' : status === 'COMPLETED' ? 'SELESAI' : 'READY'}
+              <div className="h-20 bg-[#0F1A0F] rounded-lg border border-emerald-900/50 flex items-center justify-center p-2 text-center">
+                <span className="text-xs text-emerald-400 font-mono font-bold leading-relaxed">
+                  {pattern === 'BOUSTROPHEDON' && '═► ═► Jalur Paralel Zig-Zag Bolak-Balik ◄═ ◄═'}
+                  {pattern === 'HEADLAND_INNER' && '▓▓ [Area Tengah Terlebih Dahulu] ──► [Keliling Headland Terluar]'}
+                  {pattern === 'SPIRAL_INWARD' && '◎ Spiral Inward: [Sudut Terluar] ──► [Pusat Tengah Sawah]'}
+                  {pattern === 'SPIRAL_OUTWARD' && '◉ Spiral Outward: [Pusat Tengah] ──► [Batas Luar Sawah]'}
                 </span>
               </div>
-              <div className="font-mono text-base font-extrabold text-white">⏱ {formatTimer(elapsedSec)}</div>
-              <button onClick={onExit} className="text-xs text-slate-400 font-bold hover:text-white px-2 py-1">
-                ✕ Keluar
-              </button>
-            </div>
-
-            {/* Progress Bar Card */}
-            <div className="bg-[#182618] p-3.5 rounded-2xl border border-emerald-900/40">
-              <div className="flex justify-between text-xs font-bold mb-1.5">
-                <span className="text-slate-300">Progres Penanaman</span>
-                <span className="text-emerald-400 font-extrabold">{progressPct}%</span>
-              </div>
-              <div className="w-full h-2.5 bg-emerald-950 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${progressPct}%` }}></div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mt-3 pt-2 border-t border-emerald-900/40 text-center">
-                <div>
-                  <div className="text-sm font-extrabold text-white">{Math.round((field.areaM2 * progressPct) / 100)} m²</div>
-                  <div className="text-[10px] text-slate-400">Area Selesai</div>
-                </div>
-                <div>
-                  <div className="text-sm font-extrabold text-white">{Math.max(0, field.areaM2 - Math.round((field.areaM2 * progressPct) / 100))} m²</div>
-                  <div className="text-[10px] text-slate-400">Sisa Area</div>
-                </div>
-                <div>
-                  <div className="text-sm font-extrabold text-white">{status === 'RUNNING' ? speedMps : 0} m/s</div>
-                  <div className="text-[10px] text-slate-400">Kecepatan</div>
-                </div>
+              <div className="flex gap-4 text-[9px] text-slate-300">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#00E676]"></span> Jalur Tanam</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#FFD54F]"></span> Area Putar</span>
               </div>
             </div>
+          </div>
 
-            {/* Map Canvas with live Tractor */}
-            <div className="w-full h-64 bg-[#172517] rounded-3xl border-2 border-emerald-800/60 overflow-hidden relative shadow-inner">
-              <RouteMapCanvas pattern={routePattern} tractorStep={tractorStep} live={true} />
+          {/* 3. Parameters Sliders */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-4">
+            <div>
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-slate-700">Lebar Kerja Mesin (W):</span>
+                <span className="text-emerald-700 font-mono">{machineWidth.toFixed(2)} m</span>
+              </div>
+              <input
+                type="range" min="0.8" max="3.0" step="0.1" value={machineWidth}
+                onChange={e => setMachineWidth(parseFloat(e.target.value))}
+                className="w-full accent-emerald-600 mt-1"
+              />
+            </div>
+            <div>
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-slate-700">Lebar Headland / Area Putar (H):</span>
+                <span className="text-amber-700 font-mono">{headlandWidth.toFixed(2)} m</span>
+              </div>
+              <input
+                type="range" min="1.0" max="6.0" step="0.5" value={headlandWidth}
+                onChange={e => setHeadlandWidth(parseFloat(e.target.value))}
+                className="w-full accent-amber-600 mt-1"
+              />
+            </div>
+            <div>
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-slate-700">Orientasi Sudut Jalur:</span>
+                <span className="text-emerald-700 font-mono">{orientationDeg}°</span>
+              </div>
+              <input
+                type="range" min="0" max="180" step="5" value={orientationDeg}
+                onChange={e => setOrientationDeg(parseInt(e.target.value))}
+                className="w-full accent-emerald-600 mt-1"
+              />
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <button
+            onClick={onNext}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition-all"
+          >
+            Generate & Preview Jalur →
+          </button>
+        </div>
+      );
+    }
+
+    // --- SCREEN 3: ROUTE PREVIEW VIEW ---
+    function RoutePreviewView({ activeField, pattern, machineWidth, headlandWidth, orientationDeg, onApprove, onBack }) {
+      return (
+        <div className="p-4 space-y-4">
+          <div className="flex items-center gap-3 pt-2">
+            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
+              ←
+            </button>
+            <div>
+              <h1 className="text-xl font-extrabold text-slate-900">Preview Jalur Tanam</h1>
+              <p className="text-xs text-slate-500">Langkah 2 dari 3: Verifikasi Rute Otomatis</p>
+            </div>
+          </div>
+
+          {/* High-Def Route Canvas */}
+          <div className="bg-[#1E2D1E] rounded-2xl p-4 border border-emerald-950 shadow-md space-y-3">
+            <div className="flex justify-between items-center text-white">
+              <span className="font-bold text-xs text-emerald-300">Peta Rute: {activeField.name}</span>
+              <span className="px-2 py-0.5 bg-emerald-900 text-emerald-200 text-[10px] font-mono rounded">18 Jalur</span>
             </div>
 
-            {/* Telemetry Strip */}
-            <div className="grid grid-cols-3 gap-2 bg-[#182618] p-3 rounded-2xl border border-emerald-900/40 text-center">
-              <div>
-                <span className="text-sm">🔋</span>
-                <div className="text-xs font-extrabold text-white">{batteryPct}%</div>
-                <div className="text-[10px] text-slate-400">Baterai</div>
+            <div className="h-64 bg-[#0F1A0F] rounded-xl border border-emerald-900/50 relative overflow-hidden flex items-center justify-center">
+              <svg viewBox="0 0 320 220" className="w-full h-full">
+                <polygon points="30,30 290,40 270,190 40,180" fill="#00E676" fillOpacity="0.15" stroke="#00E676" strokeWidth="2.5" />
+                <polygon points="50,50 270,58 253,172 58,164" fill="none" stroke="#FFD54F" strokeWidth="1.5" strokeDasharray="4 4" />
+                
+                {/* Parallel Lanes */}
+                <line x1="60" y1="70" x2="250" y2="72" stroke="#00E676" strokeWidth="2" />
+                <line x1="60" y1="90" x2="250" y2="92" stroke="#00E676" strokeWidth="2" />
+                <line x1="60" y1="110" x2="250" y2="112" stroke="#00E676" strokeWidth="2" />
+                <line x1="60" y1="130" x2="250" y2="132" stroke="#00E676" strokeWidth="2" />
+                <line x1="60" y1="150" x2="250" y2="152" stroke="#00E676" strokeWidth="2" />
+
+                {/* Markers */}
+                <circle cx="30" cy="30" r="7" fill="#10B981" />
+                <text x="42" y="34" fill="#FFFFFF" fontSize="10" fontWeight="bold">START</text>
+                <circle cx="40" cy="180" r="7" fill="#EF4444" />
+                <text x="52" y="184" fill="#FFFFFF" fontSize="10" fontWeight="bold">END</text>
+              </svg>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-1 text-center font-mono">
+              <div className="bg-emerald-950/60 rounded-lg p-2 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Total Jarak</span>
+                <span className="text-sm font-bold text-emerald-400">1,480 m</span>
               </div>
-              <div>
-                <span className="text-sm">📍</span>
-                <div className="text-xs font-extrabold text-emerald-400">±2 cm</div>
-                <div className="text-[10px] text-slate-400">Akurasi GPS</div>
+              <div className="bg-emerald-950/60 rounded-lg p-2 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Est. Durasi</span>
+                <span className="text-sm font-bold text-sky-400">24 Menit</span>
               </div>
-              <div>
-                <span className="text-sm">🛣️</span>
-                <div className="text-xs font-extrabold text-white">4 / 18</div>
-                <div className="text-[10px] text-slate-400">Jalur</div>
+              <div className="bg-emerald-950/60 rounded-lg p-2 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Cakupan</span>
+                <span className="text-sm font-bold text-amber-400">97.5%</span>
               </div>
+            </div>
+          </div>
+
+          <button
+            onClick={onApprove}
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-extrabold text-base shadow-lg shadow-emerald-600/25 active:scale-[0.99] transition-all"
+          >
+            ✓ APPROVE & JALANKAN MISI
+          </button>
+        </div>
+      );
+    }
+
+    // --- SCREEN 4: EXECUTION VIEW (MODE OTOMATIS LIVE) ---
+    function ExecutionView({ activeField, pattern, telemetry, isMissionRunning, isPaused, onPause, onResume, onStop, onEmergencyStop, onBack }) {
+      return (
+        <div className="p-4 space-y-4">
+          <div className="flex justify-between items-center pt-2">
+            <div>
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                ● MODE OTOMATIS
+              </span>
+              <h1 className="text-xl font-extrabold text-slate-900 mt-1">{activeField.name}</h1>
+            </div>
+            <button
+              onClick={onEmergencyStop}
+              className="px-3 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-extrabold shadow-md animate-pulse"
+            >
+              E-STOP ⛔
+            </button>
+          </div>
+
+          {/* Live Progress Canvas */}
+          <div className="bg-[#1E2D1E] rounded-2xl p-4 border border-emerald-950 space-y-3">
+            <div className="h-60 bg-[#0F1A0F] rounded-xl relative overflow-hidden flex items-center justify-center">
+              <svg viewBox="0 0 320 200" className="w-full h-full">
+                <polygon points="30,30 290,40 270,170 40,160" fill="#00E676" fillOpacity="0.15" stroke="#00E676" strokeWidth="2.5" />
+                
+                {/* Completed vs Remaining Lanes */}
+                <line x1="60" y1="60" x2="250" y2="62" stroke="#10B981" strokeWidth="3" />
+                <line x1="60" y1="85" x2="250" y2="87" stroke="#10B981" strokeWidth="3" />
+                <line x1="60" y1="110" x2="250" y2="112" stroke="#F59E0B" strokeWidth="2" strokeDasharray="4 4" />
+                <line x1="60" y1="135" x2="250" y2="137" stroke="#64748B" strokeWidth="1.5" strokeDasharray="3 3" />
+
+                {/* Animated Tractor Marker */}
+                <circle cx="160" cy="111" r="10" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="2" />
+                <text x="156" y="115" fontSize="10">🚜</text>
+              </svg>
+            </div>
+
+            {/* 3 Key Metrics */}
+            <div className="grid grid-cols-3 gap-2 text-center font-mono">
+              <div className="bg-emerald-950/60 rounded-xl p-2.5 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Area Selesai</span>
+                <span className="text-base font-extrabold text-emerald-400">{telemetry.areaDone} m²</span>
+              </div>
+              <div className="bg-emerald-950/60 rounded-xl p-2.5 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Sisa Area</span>
+                <span className="text-base font-extrabold text-amber-400">{telemetry.areaRemaining} m²</span>
+              </div>
+              <div className="bg-emerald-950/60 rounded-xl p-2.5 border border-emerald-800/40 text-white">
+                <span className="text-[10px] text-slate-400 block">Kecepatan</span>
+                <span className="text-base font-extrabold text-sky-400">{telemetry.speed.toFixed(2)} m/s</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
+            <div className="flex justify-between text-xs font-bold text-slate-800">
+              <span>Progress Penanaman</span>
+              <span className="font-mono text-emerald-700">{telemetry.progress.toFixed(1)}%</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+              <div
+                className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                style={{ width: `${telemetry.progress}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-500">
+              <span>Lajur ke-{telemetry.currentLane} dari {telemetry.totalLanes}</span>
+              <span>Baterai: {Math.round(telemetry.battery)}%</span>
             </div>
           </div>
 
           {/* Controls */}
-          <div className="space-y-2 mt-4">
-            {status === 'READY' && (
-              <button onClick={onStart} className="w-full py-4 bg-emerald-500 text-emerald-950 font-extrabold text-base rounded-2xl shadow-lg">
-                ▶ MULAI OTOMATIS
-              </button>
-            )}
-
-            {status === 'RUNNING' && (
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={onPause} className="py-3.5 bg-amber-500 text-amber-950 font-extrabold rounded-xl">
-                  ⏸ PAUSE
-                </button>
-                <button onClick={onStop} className="py-3.5 bg-red-600 text-white font-extrabold rounded-xl">
-                  ⏹ STOP
-                </button>
-              </div>
-            )}
-
-            {status === 'PAUSED' && (
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={onResume} className="py-3.5 bg-emerald-500 text-emerald-950 font-extrabold rounded-xl">
-                  ▶ RESUME
-                </button>
-                <button onClick={onStop} className="py-3.5 bg-red-600 text-white font-extrabold rounded-xl">
-                  ⏹ STOP
-                </button>
-              </div>
-            )}
-
-            {status === 'COMPLETED' && (
-              <button onClick={onFinish} className="w-full py-4 bg-emerald-500 text-emerald-950 font-extrabold text-base rounded-2xl shadow-lg">
-                🎉 SELESAI & LIHAT LAPORAN
-              </button>
-            )}
-
-            {/* Emergency Stop Button */}
-            <button
-              onClick={onEmergencyStop}
-              className="w-full py-3 bg-red-800/60 hover:bg-red-700 text-red-100 border-2 border-red-500 font-extrabold text-sm rounded-xl transition"
-            >
-              ⛔ BERHENTI DARURAT (EMERGENCY)
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    // ── SCREEN 5: MANUAL CONTROL ─────────────────────────────────────
-    function ManualControlScreen({ onBack }) {
-      const [speed, setSpeed] = useState(50);
-      return (
-        <div className="p-4 space-y-6">
-          <div className="flex items-center gap-3">
-            <button onClick={onBack} className="w-9 h-9 rounded-xl bg-[#1c2b1c] flex items-center justify-center text-slate-300 font-bold">
-              ←
-            </button>
-            <h1 className="text-lg font-extrabold text-white">Kontrol Manual</h1>
-          </div>
-
-          <div className="bg-amber-950/40 border border-amber-600/40 p-3 rounded-2xl text-xs text-amber-300 font-semibold text-center">
-            ⚠️ Gunakan tombol arah untuk memposisikan traktor secara manual
-          </div>
-
-          {/* D-Pad */}
-          <div className="flex flex-col items-center justify-center py-6">
-            <button className="w-16 h-16 bg-[#203320] border-2 border-emerald-600 active:bg-emerald-500 rounded-2xl text-2xl font-bold mb-2 shadow-lg">
-              ▲
-            </button>
-            <div className="flex gap-4">
-              <button className="w-16 h-16 bg-[#203320] border-2 border-emerald-600 active:bg-emerald-500 rounded-2xl text-2xl font-bold shadow-lg">
-                ◀
-              </button>
-              <div className="w-16 h-16 bg-[#162216] rounded-2xl flex items-center justify-center text-2xl">
-                🚜
-              </div>
-              <button className="w-16 h-16 bg-[#203320] border-2 border-emerald-600 active:bg-emerald-500 rounded-2xl text-2xl font-bold shadow-lg">
-                ▶
-              </button>
-            </div>
-            <button className="w-16 h-16 bg-[#203320] border-2 border-emerald-600 active:bg-emerald-500 rounded-2xl text-2xl font-bold mt-2 shadow-lg">
-              ▼
-            </button>
-          </div>
-
-          {/* Speed Slider */}
-          <div className="bg-[#182618] p-4 rounded-2xl border border-emerald-900/40">
-            <div className="flex justify-between text-xs font-bold mb-2">
-              <span className="text-slate-300">Kecepatan Manual</span>
-              <span className="text-emerald-400">{speed}% ({(speed * 0.015).toFixed(2)} m/s)</span>
-            </div>
-            <input
-              type="range"
-              min="10"
-              max="100"
-              value={speed}
-              onChange={e => setSpeed(Number(e.target.value))}
-              className="w-full accent-emerald-500 h-2 bg-emerald-950 rounded-lg cursor-pointer"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    // ── SCREEN 6: FIELDS LIST ─────────────────────────────────────────
-    function FieldsListScreen({ fields, onSelectField, onCreateNew, onBack }) {
-      return (
-        <div className="p-4 space-y-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <button onClick={onBack} className="w-9 h-9 rounded-xl bg-[#1c2b1c] flex items-center justify-center text-slate-300 font-bold">
-                ←
-              </button>
-              <h1 className="text-lg font-extrabold text-white">Daftar Sawah</h1>
-            </div>
-            <button onClick={onCreateNew} className="bg-emerald-500 text-emerald-950 font-extrabold text-xs px-3 py-2 rounded-xl">
-              + Tambah
-            </button>
-          </div>
-
-          <div className="space-y-2.5">
-            {fields.map(f => (
-              <div
-                key={f.id}
-                onClick={() => onSelectField(f.id)}
-                className="bg-[#182618] p-4 rounded-2xl border border-emerald-900/50 hover:border-emerald-600 cursor-pointer flex justify-between items-center transition"
+          <div className="flex gap-3">
+            {isPaused ? (
+              <button
+                onClick={onResume}
+                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md"
               >
-                <div>
-                  <div className="font-extrabold text-white text-base">{f.name}</div>
-                  <div className="text-xs text-slate-400 mt-1">{f.areaM2} m² luas • {f.boundary.length} titik koordinat</div>
-                </div>
-                <span className="text-slate-400 font-bold">→</span>
-              </div>
-            ))}
+                ▶ RESUME MISI
+              </button>
+            ) : (
+              <button
+                onClick={onPause}
+                className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm shadow-md"
+              >
+                ⏸ PAUSE
+              </button>
+            )}
+            <button
+              onClick={onStop}
+              className="px-6 py-3.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold text-sm"
+            >
+              Hentikan
+            </button>
           </div>
         </div>
       );
     }
 
-    // ── SCREEN 7: FIELD CREATE ────────────────────────────────────────
-    function FieldCreateScreen({ onSave, onBack }) {
-      const [name, setName] = useState('');
-      const [points, setPoints] = useState([
-        { lat: -6.2000, lon: 106.8166 },
-        { lat: -6.2005, lon: 106.8166 },
-        { lat: -6.2005, lon: 106.8172 },
-        { lat: -6.2000, lon: 106.8172 },
-      ]);
-
-      const handleSave = () => {
-        if (!name) return alert('Masukkan nama sawah');
-        onSave({
-          id: 'field-' + Date.now(),
-          name,
-          areaM2: 1850,
-          perimeterM: 160,
-          boundary: points,
-        });
-      };
+    // --- SCREEN 5: MANUAL CONTROL (D-PAD) ---
+    function ManualControlView({ telemetry, manualSpeed, setManualSpeed, onClose }) {
+      const [pressedDir, setPressedDir] = useState(null);
 
       return (
-        <div className="p-4 space-y-4 pb-8">
-          <div className="flex items-center gap-3">
-            <button onClick={onBack} className="w-9 h-9 rounded-xl bg-[#1c2b1c] flex items-center justify-center text-slate-300 font-bold">
-              ←
+        <div className="p-4 space-y-5">
+          <div className="flex justify-between items-center pt-2">
+            <div>
+              <h1 className="text-xl font-extrabold text-slate-900">Kontrol Manual</h1>
+              <p className="text-xs text-slate-500">Teleoperasi D-Pad Nirkabel</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
+              ✕
             </button>
-            <h1 className="text-lg font-extrabold text-white">Tambah Sawah Baru</h1>
           </div>
 
-          <div className="bg-[#182618] p-4 rounded-2xl border border-emerald-900/40 space-y-3">
-            <label className="text-xs font-bold text-slate-300 block">Nama Sawah</label>
-            <input
-              type="text"
-              placeholder="Contoh: Sawah Petak 3"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full bg-[#121c12] border border-emerald-900 rounded-xl px-3 py-2.5 text-white font-bold text-sm outline-none"
-            />
-          </div>
+          {/* D-Pad Layout */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col items-center justify-center space-y-4">
+            <button
+              onMouseDown={() => setPressedDir('UP')}
+              onMouseUp={() => setPressedDir(null)}
+              className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'UP' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}
+            >
+              <span className="text-2xl">▲</span>
+              <span className="text-[10px]">MAJU</span>
+            </button>
 
-          <div className="bg-[#182618] p-4 rounded-2xl border border-emerald-900/40 space-y-2">
-            <span className="text-xs font-bold text-slate-300 block mb-2">Titik Koordinat Batas (Polygon)</span>
-            {points.map((p, idx) => (
-              <div key={idx} className="flex gap-2 text-xs">
-                <span className="w-6 py-1.5 text-slate-400 font-bold text-center">#{idx+1}</span>
-                <input readOnly value={`Lat: ${p.lat}`} className="flex-1 bg-[#121c12] rounded-lg px-2 py-1.5 text-slate-300" />
-                <input readOnly value={`Lon: ${p.lon}`} className="flex-1 bg-[#121c12] rounded-lg px-2 py-1.5 text-slate-300" />
+            <div className="flex gap-6 items-center">
+              <button
+                onMouseDown={() => setPressedDir('LEFT')}
+                onMouseUp={() => setPressedDir(null)}
+                className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'LEFT' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}
+              >
+                <span className="text-2xl">◀</span>
+                <span className="text-[10px]">KIRI</span>
+              </button>
+              <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-lg">
+                🤖
               </div>
-            ))}
+              <button
+                onMouseDown={() => setPressedDir('RIGHT')}
+                onMouseUp={() => setPressedDir(null)}
+                className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'RIGHT' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}
+              >
+                <span className="text-2xl">▶</span>
+                <span className="text-[10px]">KANAN</span>
+              </button>
+            </div>
+
+            <button
+              onMouseDown={() => setPressedDir('DOWN')}
+              onMouseUp={() => setPressedDir(null)}
+              className={`w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center font-bold transition-all ${pressedDir === 'DOWN' ? 'bg-emerald-600 text-white border-emerald-700 scale-95' : 'bg-emerald-50 text-emerald-800 border-emerald-600 shadow-md'}`}
+            >
+              <span className="text-2xl">▼</span>
+              <span className="text-[10px]">MUNDUR</span>
+            </button>
           </div>
 
-          <button onClick={handleSave} className="w-full py-4 bg-emerald-500 text-emerald-950 font-extrabold text-base rounded-2xl shadow-lg">
-            SIMPAN SAWAH
-          </button>
+          {/* Speed Presets */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
+            <div className="flex justify-between text-xs font-bold">
+              <span className="text-slate-700">Kecepatan Motor:</span>
+              <span className="text-emerald-700 font-mono">{manualSpeed}% ({(manualSpeed * 0.01).toFixed(2)} m/s)</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {[30, 60, 100].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setManualSpeed(s)}
+                  className={`py-2 rounded-xl text-xs font-bold border ${manualSpeed === s ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}
+                >
+                  {s === 30 ? 'Lambat (30%)' : s === 60 ? 'Sedang (60%)' : 'Cepat (100%)'}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       );
     }
 
-    // ── SCREEN 8: HISTORY ─────────────────────────────────────────────
-    function HistoryScreen({ missions, onBack }) {
+    // --- SCREEN 6: FIELD LIST VIEW ---
+    function FieldListView({ fields, selectedFieldId, onSelect, onAddNew, onBack }) {
       return (
         <div className="p-4 space-y-4">
-          <div className="flex items-center gap-3">
-            <button onClick={onBack} className="w-9 h-9 rounded-xl bg-[#1c2b1c] flex items-center justify-center text-slate-300 font-bold">
-              ←
+          <div className="flex justify-between items-center pt-2">
+            <div>
+              <h1 className="text-xl font-extrabold text-slate-900">Daftar Petak Sawah</h1>
+              <p className="text-xs text-slate-500">Pilih atau tambahkan petak sawah baru</p>
+            </div>
+            <button
+              onClick={onAddNew}
+              className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm"
+            >
+              + Tambah Sawah
             </button>
-            <h1 className="text-lg font-extrabold text-white">Riwayat & Laporan</h1>
           </div>
 
           <div className="space-y-3">
-            {missions.map(m => (
-              <div key={m.id} className="bg-[#182618] p-4 rounded-2xl border border-emerald-900/40 space-y-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-extrabold text-white text-base">{m.name}</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">{m.date} • {m.duration}</p>
+            {fields.map(f => {
+              const isSelected = f.id === selectedFieldId;
+              return (
+                <div
+                  key={f.id}
+                  onClick={() => onSelect(f.id)}
+                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${isSelected ? 'bg-emerald-50 border-emerald-600 shadow-sm' : 'bg-white border-slate-200'}`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-base">{f.name}</h3>
+                      <p className="text-xs text-slate-500 mt-1">📐 Luas: {f.areaM2} m² • 📍 {f.boundary.length} Titik Batas</p>
+                    </div>
+                    {isSelected && (
+                      <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-full text-[10px] font-bold">
+                        Aktif
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[10px] font-extrabold bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800">
-                    {m.status}
-                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-emerald-900/40 text-xs">
-                  <div>Luas Tertanam: <b className="text-white">{m.areaPlanted}</b></div>
-                  <div>Cakupan: <b className="text-emerald-400">{m.coveragePct}%</b></div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       );
     }
 
-    // ── SCREEN 9: SETTINGS ────────────────────────────────────────────
-    function SettingsScreen({ onBack }) {
+    // --- SCREEN 7: FIELD CREATE VIEW (AUTO-GPS & WALK AND MAP) ---
+    function FieldCreateView({ fieldName, setFieldName, points, setPoints, walkMapActive, setWalkMapActive, telemetry, onSave, onBack }) {
       return (
         <div className="p-4 space-y-4">
-          <div className="flex items-center gap-3">
-            <button onClick={onBack} className="w-9 h-9 rounded-xl bg-[#1c2b1c] flex items-center justify-center text-slate-300 font-bold">
+          <div className="flex items-center gap-3 pt-2">
+            <button onClick={onBack} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
               ←
             </button>
-            <h1 className="text-lg font-extrabold text-white">Pengaturan Aplikasi</h1>
+            <div>
+              <h1 className="text-xl font-extrabold text-slate-900">Tambah Sawah Baru</h1>
+              <p className="text-xs text-slate-500">Pemetaan Batas Koordinat GPS</p>
+            </div>
           </div>
 
-          <div className="bg-[#182618] p-4 rounded-2xl border border-emerald-900/40 space-y-3">
-            <span className="text-xs font-bold text-white uppercase tracking-wider">Koneksi Mesin</span>
-            <div className="space-y-2 text-sm">
-              <div className="p-3 rounded-xl bg-[#121c12] border border-emerald-600 flex justify-between items-center">
-                <span>Simulator Virtual (Offline)</span>
-                <span className="text-emerald-400 font-bold">✓ Aktif</span>
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Nama Sawah (Contoh: Sawah Blok Barat)"
+              value={fieldName}
+              onChange={e => setFieldName(e.target.value)}
+              className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:border-emerald-600"
+            />
+
+            {/* GPS Auto Location Card */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-slate-800 text-xs flex items-center gap-1">📍 Lokasi GPS Terkini</span>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">±1.2m Akurat</span>
               </div>
-              <div className="p-3 rounded-xl bg-[#121c12] border border-emerald-900/40 text-slate-400 flex justify-between items-center">
-                <span>WiFi ESP32 / WebSocket (192.168.4.1)</span>
-                <span>Standby</span>
+              <p className="text-xs font-mono text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                Lat: {telemetry.lat.toFixed(6)}, Lon: {telemetry.lon.toFixed(6)}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setPoints(prev => [...prev, { lat: telemetry.lat, lon: telemetry.lon }])}
+                  className="py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs"
+                >
+                  + Titik GPS Terkini
+                </button>
+                <button
+                  onClick={() => setWalkMapActive(!walkMapActive)}
+                  className={`py-2.5 border rounded-xl font-bold text-xs ${walkMapActive ? 'bg-emerald-100 border-emerald-600 text-emerald-800' : 'bg-white border-slate-200 text-slate-700'}`}
+                >
+                  {walkMapActive ? '🚶 Selesai Rekam' : '🚶 Walk & Map'}
+                </button>
               </div>
-              <div className="p-3 rounded-xl bg-[#121c12] border border-emerald-900/40 text-slate-400 flex justify-between items-center">
-                <span>GSM 4G / MQTT (Cloud HiveMQ)</span>
-                <span>Standby</span>
+            </div>
+
+            {/* Points List */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
+              <span className="text-xs font-bold text-slate-800 block">Daftar Titik Batas ({points.length} Titik):</span>
+              <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                {points.map((pt, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-xs font-mono bg-slate-50 p-2 rounded-lg border border-slate-100">
+                    <span>Titik {idx + 1}: {pt.lat.toFixed(6)}, {pt.lon.toFixed(6)}</span>
+                    <button onClick={() => setPoints(prev => prev.filter((_, i) => i !== idx))} className="text-rose-600 font-bold px-1.5">✕</button>
+                  </div>
+                ))}
               </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!fieldName.trim()) return alert('Nama sawah wajib diisi!');
+                onSave({
+                  id: 'f_' + Date.now(),
+                  name: fieldName,
+                  areaM2: 1250,
+                  perimeterM: 140.0,
+                  boundary: points
+                });
+              }}
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-extrabold text-base shadow-md"
+            >
+              Simpan Sawah
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // --- SCREEN 8: HISTORY VIEW ---
+    function HistoryView({ onBack }) {
+      return (
+        <div className="p-4 space-y-4">
+          <h1 className="text-xl font-extrabold text-slate-900 pt-2">Riwayat Misi & Laporan</h1>
+          <div className="space-y-3">
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="font-bold text-slate-800 text-sm">Misi Sawah Karawang #27</span>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">SELESAI</span>
+              </div>
+              <p className="text-xs text-slate-500">27 Agustus 2026 • 1,722 m² tertanam (98%)</p>
+            </div>
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="font-bold text-slate-800 text-sm">Misi Sawah Timur #14</span>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">SELESAI</span>
+              </div>
+              <p className="text-xs text-slate-500">25 Agustus 2026 • 890 m² tertanam (97%)</p>
             </div>
           </div>
         </div>
       );
     }
 
-    // ── GRAPHICS: DYNAMIC SVG PATTERN DIAGRAM (EXACTLY LIKE PREVIEW.WEBP) ──
-    function SVGPatternDiagram({ pattern }) {
+    // --- SCREEN 9: SETTINGS VIEW ---
+    function SettingsView({ connectionMode, setConnectionMode, onBack }) {
       return (
-        <svg viewBox="0 0 340 180" className="w-full h-44 rounded-xl bg-[#142014] border border-emerald-900/50">
-          <defs>
-            <pattern id="patGrid" width="16" height="16" patternUnits="userSpaceOnUse">
-              <path d="M 16 0 L 0 0 0 16" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-            </pattern>
-            <marker id="arrowHead" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
-              <path d="M 0 1 L 5 3 L 0 5 z" fill="#FFFFFF" />
-            </marker>
-          </defs>
+        <div className="p-4 space-y-4">
+          <h1 className="text-xl font-extrabold text-slate-900 pt-2">Pengaturan Aplikasi</h1>
 
-          <rect width="340" height="180" fill="url(#patGrid)" />
+          {/* Theme card */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
+            <h3 className="font-bold text-slate-800 text-sm">Tema Tampilan Aplikasi</h3>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="p-3 rounded-xl border-2 border-emerald-600 bg-emerald-50 text-center">
+                <span className="text-xl block">🌞</span>
+                <span className="text-xs font-bold text-emerald-900 block mt-1">Versi Light</span>
+                <span className="text-[10px] text-emerald-700 font-semibold">Aktif (Default)</span>
+              </div>
+              <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-center opacity-60">
+                <span className="text-xl block">🌙</span>
+                <span className="text-xs font-bold text-slate-700 block mt-1">Versi Dark</span>
+                <span className="text-[10px] text-slate-500">Mode Malam</span>
+              </div>
+            </div>
+          </div>
 
-          {/* Pattern 1: Boustrophedon */}
-          {pattern === 'BOUSTROPHEDON' && (
-            <g>
-              <rect x="24" y="20" width="292" height="135" rx="6" fill="rgba(46, 125, 50, 0.2)" stroke="#66BB6A" strokeWidth="2" />
-              <rect x="36" y="30" width="268" height="115" rx="4" fill="none" stroke="#FBC02D" strokeWidth="1.5" strokeDasharray="4 2" />
-
-              <path d="M 44 42 L 296 42" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" />
-              <path d="M 296 42 Q 308 55 296 68" fill="none" stroke="#00E676" strokeWidth="1.8" strokeDasharray="3 2" />
-              <path d="M 296 68 L 44 68" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" />
-              <path d="M 44 68 Q 32 81 44 94" fill="none" stroke="#00E676" strokeWidth="1.8" strokeDasharray="3 2" />
-              <path d="M 44 94 L 296 94" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" />
-              <path d="M 296 94 Q 308 107 296 120" fill="none" stroke="#00E676" strokeWidth="1.8" strokeDasharray="3 2" />
-              <path d="M 296 120 L 44 120" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" />
-
-              <path d="M 160 42 L 180 42" stroke="#FFF" strokeWidth="1.5" markerEnd="url(#arrowHead)" />
-              <path d="M 180 68 L 160 68" stroke="#FFF" strokeWidth="1.5" markerEnd="url(#arrowHead)" />
-              <path d="M 160 94 L 180 94" stroke="#FFF" strokeWidth="1.5" markerEnd="url(#arrowHead)" />
-              <path d="M 180 120 L 160 120" stroke="#FFF" strokeWidth="1.5" markerEnd="url(#arrowHead)" />
-
-              <circle cx="44" cy="42" r="5" fill="#00E676" stroke="#FFF" strokeWidth="1.5" />
-              <text x="56" y="34" fontSize="8" fontWeight="bold" fill="#00E676">START (Masuk)</text>
-
-              <circle cx="44" cy="120" r="5" fill="#FF1744" stroke="#FFF" strokeWidth="1.5" />
-              <text x="56" y="132" fontSize="8" fontWeight="bold" fill="#FF1744">END (Keluar)</text>
-              <text x="280" y="73" fontSize="14">🚜</text>
-            </g>
-          )}
-
-          {/* Pattern 2: Headland */}
-          {pattern === 'HEADLAND_INNER' && (
-            <g>
-              <rect x="24" y="20" width="292" height="135" rx="6" fill="rgba(46, 125, 50, 0.2)" stroke="#66BB6A" strokeWidth="2" />
-              <rect x="34" y="28" width="272" height="119" rx="5" fill="none" stroke="#FBC02D" strokeWidth="2" strokeDasharray="5 3" />
-              <rect x="46" y="38" width="248" height="99" rx="3" fill="rgba(0,230,118,0.08)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-
-              <path d="M 54 50 L 286 50 M 286 74 L 54 74 M 54 98 L 286 98 M 286 114 L 54 114" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" />
-
-              <circle cx="34" cy="28" r="5" fill="#00E676" stroke="#FFF" strokeWidth="1.5" />
-              <text x="44" y="24" fontSize="8" fontWeight="bold" fill="#00E676">1. MASUK (Start)</text>
-
-              <circle cx="34" cy="50" r="5" fill="#FF1744" stroke="#FFF" strokeWidth="1.5" />
-              <text x="44" y="58" fontSize="8" fontWeight="bold" fill="#FF1744">3. KELUAR (End)</text>
-              <text x="170" y="100" fontSize="14">🚜</text>
-            </g>
-          )}
-
-          {/* Pattern 3: Spiral Inward */}
-          {pattern === 'SPIRAL_INWARD' && (
-            <g>
-              <rect x="24" y="20" width="292" height="135" rx="6" fill="rgba(46, 125, 50, 0.2)" stroke="#66BB6A" strokeWidth="2" />
-              <rect x="34" y="28" width="272" height="119" rx="4" fill="none" stroke="#FBC02D" strokeWidth="1.5" strokeDasharray="4 2" />
-
-              <rect x="44" y="36" width="252" height="103" rx="4" fill="none" stroke="#00E676" strokeWidth="2.5" />
-              <rect x="62" y="50" width="216" height="75" rx="4" fill="none" stroke="#00E676" strokeWidth="2.5" />
-              <rect x="80" y="64" width="180" height="47" rx="3" fill="rgba(0, 230, 118, 0.2)" stroke="#00E676" strokeWidth="2.5" />
-
-              <circle cx="44" cy="36" r="5" fill="#00E676" stroke="#FFF" strokeWidth="1.5" />
-              <text x="56" y="30" fontSize="8" fontWeight="bold" fill="#00E676">START (Pinggir)</text>
-
-              <circle cx="170" cy="87" r="5" fill="#FF1744" stroke="#FFF" strokeWidth="1.5" />
-              <text x="170" y="102" fontSize="8" fontWeight="bold" fill="#FF1744" textAnchor="middle">END (Tengah)</text>
-              <text x="280" y="90" fontSize="14">🚜</text>
-            </g>
-          )}
-
-          {/* Pattern 4: Spiral Outward */}
-          {pattern === 'SPIRAL_OUTWARD' && (
-            <g>
-              <rect x="24" y="20" width="292" height="135" rx="6" fill="rgba(46, 125, 50, 0.2)" stroke="#66BB6A" strokeWidth="2" />
-              <rect x="34" y="28" width="272" height="119" rx="4" fill="none" stroke="#FBC02D" strokeWidth="1.5" strokeDasharray="4 2" />
-
-              <rect x="80" y="64" width="180" height="47" rx="3" fill="rgba(0, 230, 118, 0.2)" stroke="#00E676" strokeWidth="2.5" />
-              <rect x="62" y="50" width="216" height="75" rx="4" fill="none" stroke="#00E676" strokeWidth="2.5" />
-              <rect x="44" y="36" width="252" height="103" rx="4" fill="none" stroke="#00E676" strokeWidth="2.5" />
-
-              <circle cx="170" cy="87" r="5" fill="#00E676" stroke="#FFF" strokeWidth="1.5" />
-              <text x="170" y="75" fontSize="8" fontWeight="bold" fill="#00E676" textAnchor="middle">START (Tengah)</text>
-
-              <circle cx="44" cy="139" r="5" fill="#FF1744" stroke="#FFF" strokeWidth="1.5" />
-              <text x="56" y="145" fontSize="8" fontWeight="bold" fill="#FF1744">END (Pinggir)</text>
-              <text x="175" y="95" fontSize="14">🚜</text>
-            </g>
-          )}
-        </svg>
+          {/* Connection Mode */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2">
+            <h3 className="font-bold text-slate-800 text-sm">Mode Komunikasi Mesin</h3>
+            <div className="space-y-1.5 text-xs font-bold text-slate-700">
+              {['SIMULATOR', 'WIFI', 'BLUETOOTH', 'GSM'].map(m => (
+                <label key={m} className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="radio" name="conn" checked={connectionMode === m}
+                    onChange={() => setConnectionMode(m)}
+                    className="accent-emerald-600"
+                  />
+                  <span>{m === 'SIMULATOR' ? '🧪 Simulator Virtual (Offline)' : m === 'WIFI' ? '📶 WiFi / ESP32 WebSocket' : m === 'BLUETOOTH' ? '🔵 Bluetooth HC-05' : '📡 GSM 4G (MQTT)'}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
       );
     }
 
-    // ── GRAPHICS: MAP CANVAS FOR PREVIEW & LIVE EXECUTION ─────────────
-    function RouteMapCanvas({ pattern, tractorStep = 0, live = false }) {
-      return (
-        <svg viewBox="0 0 380 280" className="w-full h-full">
-          <defs>
-            <pattern id="fieldGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-            </pattern>
-          </defs>
-
-          <rect width="380" height="280" fill="url(#fieldGrid)" />
-
-          {/* Polygon Field Boundary */}
-          <polygon points="40,40 340,30 330,240 50,230" fill="rgba(46, 125, 50, 0.22)" stroke="#66BB6A" strokeWidth="2.5" />
-          <polygon points="56,54 324,46 316,224 64,216" fill="none" stroke="#FBC02D" strokeWidth="2" strokeDasharray="5 3" />
-
-          {/* Lanes */}
-          {pattern === 'BOUSTROPHEDON' && (
-            <g>
-              <path d="M 68 70 L 310 70 M 310 100 L 68 100 M 68 130 L 310 130 M 310 160 L 68 160 M 68 190 L 310 190" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" />
-            </g>
-          )}
-
-          {pattern === 'HEADLAND_INNER' && (
-            <g>
-              <polygon points="56,54 324,46 316,224 64,216" fill="none" stroke="#00E676" strokeWidth="2.5" />
-              <path d="M 80 85 L 300 85 M 300 115 L 80 115 M 80 145 L 300 145 M 300 175 L 80 175" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" />
-            </g>
-          )}
-
-          {(pattern === 'SPIRAL_INWARD' || pattern === 'SPIRAL_OUTWARD') && (
-            <g>
-              <polygon points="68,64 312,58 304,212 76,204" fill="none" stroke="#00E676" strokeWidth="2.5" />
-              <polygon points="90,80 290,74 282,192 98,186" fill="none" stroke="#00E676" strokeWidth="2.5" />
-              <polygon points="112,96 268,90 260,172 120,168" fill="none" stroke="#00E676" strokeWidth="2.5" />
-              <polygon points="134,112 246,106 238,152 142,148" fill="rgba(0,230,118,0.2)" stroke="#00E676" strokeWidth="2.5" />
-            </g>
-          )}
-
-          {/* Start & End Points */}
-          <circle cx="68" cy="70" r="7" fill="#00E676" stroke="#FFF" strokeWidth="2" />
-          <text x="68" y="55" fontSize="10" fontWeight="bold" fill="#00E676" textAnchor="middle">START</text>
-
-          <circle cx="310" cy="190" r="7" fill="#FF1744" stroke="#FFF" strokeWidth="2" />
-          <text x="310" y="210" fontSize="10" fontWeight="bold" fill="#FF1744" textAnchor="middle">END</text>
-
-          {/* Live Tractor Position */}
-          {live && (
-            <g transform={`translate(${120 + (tractorStep % 140)}, ${80 + (Math.sin(tractorStep * 0.2) * 40)})`}>
-              <circle cx="0" cy="0" r="18" fill="rgba(255, 235, 59, 0.3)" />
-              <circle cx="0" cy="0" r="8" fill="#FFEB3B" stroke="#000" strokeWidth="1.5" />
-              <text x="0" y="4" fontSize="12" textAnchor="middle">🚜</text>
-            </g>
-          )}
-
-          {/* Legend */}
-          <g transform="translate(10, 240)">
-            <rect width="180" height="30" rx="6" fill="rgba(15, 25, 15, 0.85)" />
-            <line x1="12" y1="15" x2="30" y2="15" stroke="#00E676" strokeWidth="2.5" />
-            <text x="36" y="18" fontSize="9" fill="#E8F5E9" fontWeight="bold">Jalur Tanam</text>
-            <line x1="95" y1="15" x2="115" y2="15" stroke="#FBC02D" strokeWidth="2" strokeDasharray="3 2" />
-            <text x="120" y="18" fontSize="9" fill="#E8F5E9" fontWeight="bold">Headland</text>
-          </g>
-        </svg>
-      );
-    }
-
-    // Render React Root
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<PadiBotApp />);
+    ReactDOM.render(<App />, document.getElementById('root'));
   </script>
 </body>
 </html>
