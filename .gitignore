@@ -1,8 +1,14 @@
+# Gradle & Android Build Artifacts
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+
 # Dependencies
 node_modules/
 .expo/
 dist/
-build/
 
 # SQLite database (device-local)
 *.db
@@ -18,18 +24,12 @@ build/
 .idea/
 *.swp
 *.swo
+*.iml
 
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# Expo
-.expo-shared/
-web-build/
-
-# TypeScript
-*.tsbuildinfo
 
 # Logs
 *.log
