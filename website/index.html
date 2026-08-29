@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PadiBot — Smart Rice Planter & Autonomous Precision Robotics</title>
+  <meta name="description" content="Sistem robot penanam padi otonom modern berbasis Arduino & Android. Pemetaan sawah presisi, navigasi Boustrophedon otomatis, dan telemetri 100% offline.">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              emerald: '#059669',
+              lightGreen: '#10B981',
+              cyan: '#0284C7',
+              amber: '#D97706',
+              surface: '#F8FAFC'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-fresh-mesh bg-grid-pattern-light text-slate-800 min-h-screen relative antialiased selection:bg-emerald-200 selection:text-emerald-900">
+
+  <!-- Toast Notification -->
+  <div id="toastNotification" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="glass-panel-light rounded-2xl p-4 border border-emerald-300 shadow-2xl flex items-center space-x-3 bg-white/95">
+      <div class="p-2.5 rounded-xl bg-emerald-100 text-emerald-700">
+        <i data-lucide="download" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h4 class="text-sm font-bold text-slate-900">Download Paket PadiBot</h4>
+        <p class="text-xs text-slate-500">Mengunduh APK Android v1.1 & Arduino Firmware...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING NAVBAR (Precision Balanced Alignment) -->
+  <header class="fixed top-3.5 inset-x-0 max-w-6xl mx-auto px-4 z-50">
+    <nav class="glass-panel-light rounded-2xl px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between shadow-lg shadow-slate-900/5 whitespace-nowrap border border-slate-200/90">
+      
+      <!-- Brand Logo (Left) -->
+      <a href="#overview" class="flex items-center space-x-2.5 sm:space-x-3 shrink-0 group">
+        <img src="assets/ic_padibot_logo.jpg" alt="PadiBot Logo" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl object-cover shadow-sm border border-emerald-300 group-hover:scale-105 transition-transform" />
+        <div class="flex items-center space-x-2">
+          <span class="font-tech text-base sm:text-lg font-bold tracking-wider text-slate-900">PADI<span class="text-emerald-600">BOT</span></span>
+          <span class="hidden md:inline-flex text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 items-center space-x-1 font-semibold">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-beacon"></span>
+            <span>v1.1</span>
+          </span>
+        </div>
+      </a>
+
+      <!-- Desktop Navigation Links (Center - Precision Spaced) -->
+      <div id="desktopNavLinks" class="hidden lg:flex items-center space-x-1 xl:space-x-1.5 text-xs xl:text-sm font-semibold">
+        <a href="#overview" class="nav-link nav-link-active px-3.5 py-1.5 rounded-xl transition-all duration-200" data-section="overview">Home</a>
+        <a href="#app-showcase" class="nav-link nav-link-inactive px-3.5 py-1.5 rounded-xl transition-all duration-200" data-section="app-showcase">Showcase</a>
+        <a href="#simulator" class="nav-link nav-link-inactive px-3.5 py-1.5 rounded-xl transition-all duration-200" data-section="simulator">Live Simulator</a>
+        <a href="#schematics" class="nav-link nav-link-inactive px-3.5 py-1.5 rounded-xl transition-all duration-200" data-section="schematics">Specs</a>
+        <a href="#patterns" class="nav-link nav-link-inactive px-3.5 py-1.5 rounded-xl transition-all duration-200" data-section="patterns">Pola Jalur</a>
+        <a href="#faq" class="nav-link nav-link-inactive px-3.5 py-1.5 rounded-xl transition-all duration-200" data-section="faq">FAQ</a>
+      </div>
+
+      <!-- Actions (Right) -->
+      <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
+        <a href="https://github.com/adimaryanto-stack/Padi-Bot" target="_blank" class="hidden sm:flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-mono text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 shadow-sm transition-all">
+          <i data-lucide="github" class="w-3.5 h-3.5 text-slate-700"></i>
+          <span>GitHub</span>
+        </a>
+        <button class="download-trigger-btn btn-fresh-glow px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold text-white flex items-center space-x-1.5 shadow-md shadow-emerald-500/20">
+          <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+          <span>Download APK</span>
+        </button>
+        <!-- Mobile Hamburger -->
+        <button id="mobileMenuBtn" class="lg:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 bg-white border border-slate-200 shadow-sm">
+          <i data-lucide="menu" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Mobile Dropdown -->
+    <div id="mobileMenu" class="hidden lg:hidden mt-2 glass-panel-light rounded-2xl p-3 space-y-1.5 shadow-xl border border-slate-200">
+      <a href="#overview" class="mobile-nav-link nav-link-active block px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200" data-section="overview">Home</a>
+      <a href="#app-showcase" class="mobile-nav-link nav-link-inactive block px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200" data-section="app-showcase">Showcase</a>
+      <a href="#simulator" class="mobile-nav-link nav-link-inactive block px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200" data-section="simulator">Live Simulator</a>
+      <a href="#schematics" class="mobile-nav-link nav-link-inactive block px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200" data-section="schematics">Specs</a>
+      <a href="#patterns" class="mobile-nav-link nav-link-inactive block px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200" data-section="patterns">Pola Jalur</a>
+      <a href="#faq" class="mobile-nav-link nav-link-inactive block px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200" data-section="faq">FAQ</a>
+    </div>
+  </header>
+
+  <!-- HERO SECTION WITH 3D PERSPECTIVE VISUALIZER -->
+  <section id="overview" class="relative pt-32 pb-16 md:pt-40 md:pb-24 overflow-hidden">
+    <div class="max-w-6xl mx-auto px-4 relative z-10">
+      
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+        
+        <!-- Hero Text & CTA (7 cols) -->
+        <div class="lg:col-span-7">
+          <div class="inline-flex items-center space-x-3 mb-6 px-4 py-1.5 rounded-full bg-white/90 border border-emerald-200 text-xs font-mono text-slate-700 shadow-sm">
+            <span class="flex h-2.5 w-2.5 relative">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span class="text-slate-500 font-medium">STATUS:</span>
+            <span class="text-emerald-700 font-bold">AUTONOMOUS PRECISION READY</span>
+            <span class="text-slate-300">|</span>
+            <span class="text-cyan-700 font-semibold">RTK: ±2.5cm</span>
+          </div>
+
+          <h1 class="font-tech text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
+            Revolusi Tanam Padi <br />
+            <span class="text-gradient-fresh">Otonom & Presisi</span> Dari Smartphone
+          </h1>
+          
+          <p class="mt-5 text-base sm:text-lg text-slate-600 max-w-xl leading-relaxed font-normal">
+            PadiBot mengotomatiskan proses tanam padi sawah dengan mikrokontroler <strong>Arduino Mega</strong>, pemetaan batas satelit berakurasi <strong>3 cm</strong>, dan kontrol telemetri <strong>100% offline</strong>.
+          </p>
+
+          <div class="mt-8 flex flex-wrap items-center gap-4">
+            <a href="#app-showcase" class="btn-fresh-glow px-6 py-3.5 rounded-xl font-bold text-sm text-white flex items-center space-x-2">
+              <i data-lucide="layers" class="w-4 h-4"></i>
+              <span>Eksplorasi Layar Aplikasi (3D)</span>
+            </a>
+            <a href="#simulator" class="px-5 py-3.5 rounded-xl font-bold text-sm bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-sm transition-all flex items-center space-x-2">
+              <i data-lucide="play-circle" class="w-4 h-4 text-emerald-600"></i>
+              <span>Coba Simulasi Sawah</span>
+            </a>
+          </div>
+
+          <!-- Quick Badges -->
+          <div class="mt-10 grid grid-cols-3 gap-3 text-xs font-mono">
+            <div class="p-3 rounded-2xl bg-white border border-emerald-100 shadow-sm">
+              <div class="text-slate-400 text-[10px]">AKURASI RTK</div>
+              <div class="text-emerald-700 font-bold text-base mt-0.5">± 2.5 cm</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-white border border-cyan-100 shadow-sm">
+              <div class="text-slate-400 text-[10px]">PENYIMPANAN</div>
+              <div class="text-cyan-700 font-bold text-base mt-0.5">100% Offline</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-white border border-amber-100 shadow-sm">
+              <div class="text-slate-400 text-[10px]">KAPASITAS LAHAN</div>
+              <div class="text-amber-700 font-bold text-base mt-0.5">0.4 ha / jam</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hero 3D Perspective Visualizer Card (5 cols) -->
+        <div class="lg:col-span-5 perspective-container">
+          <div class="tilt-card glass-panel-light p-4 rounded-3xl relative border-emerald-200 shadow-2xl bg-white/95">
+            <div class="relative rounded-2xl overflow-hidden shadow-inner border border-slate-200 aspect-[4/3]">
+              <img src="assets/ic_hero_paddy.jpg" alt="PadiBot Autonomous Rice Planter in Rice Field" class="w-full h-full object-cover" />
+              
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-transparent to-transparent"></div>
+
+              <!-- 3D Floating Badges -->
+              <div class="tilt-content-deep absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-white/95 backdrop-blur border border-emerald-300 shadow-lg text-[11px] font-mono font-bold text-emerald-800 flex items-center space-x-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <span>🌾 AGRI-ROV OTONOM AKTIF</span>
+              </div>
+
+              <div class="tilt-content absolute bottom-3 left-3 right-3 p-3 rounded-xl bg-slate-900/90 backdrop-blur border border-white/20 text-white flex items-center justify-between text-xs font-mono">
+                <div>
+                  <div class="text-[10px] text-emerald-400 font-bold">LOKASI PENANAMAN</div>
+                  <div class="font-bold text-sm">Sawah Terasering Jatiluwih</div>
+                </div>
+                <span class="px-2.5 py-1 rounded-lg bg-emerald-500/30 text-emerald-300 font-bold border border-emerald-400 text-[10px]">
+                  RTK FIXED
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- INTERACTIVE 3D APP SHOWCASE (CLEAN TRANSPARENT 3D PHONES) -->
+  <section id="app-showcase" class="py-20 bg-white/80 border-y border-slate-200 relative">
+    <div class="max-w-6xl mx-auto px-4">
+      
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <div class="inline-flex items-center space-x-2 text-xs font-mono text-emerald-700 font-bold mb-2">
+          <i data-lucide="smartphone" class="w-4 h-4"></i>
+          <span>INTERACTIVE 3D SCREEN SHOWCASE</span>
+        </div>
+        <h2 class="font-tech text-3xl sm:text-4xl font-bold text-slate-900">
+          6 Layar Antarmuka <span class="text-gradient-fresh">PadiBot Android</span>
+        </h2>
+        <p class="text-sm text-slate-600 mt-2">
+          Klik setiap kartu di bawah untuk meninjau detail tangkapan layar asli aplikasi secara interaktif dalam format 3D.
+        </p>
+      </div>
+
+      <!-- Main Showcase Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        
+        <!-- Left: 3D Clean Floating Phone Stage (5 cols) -->
+        <div class="lg:col-span-5 flex flex-col items-center justify-center">
+          <div class="relative w-[230px] sm:w-[260px] animate-float-slow transition-all duration-300">
+            
+            <!-- Soft Ambient Glow behind phone -->
+            <div class="absolute -inset-4 bg-gradient-to-tr from-emerald-500/20 to-cyan-500/20 rounded-full blur-2xl pointer-events-none"></div>
+
+            <!-- Standalone Clean Rounded Phone Screen -->
+            <div class="relative rounded-[28px] overflow-hidden shadow-2xl border-2 border-slate-300/80 bg-white shadow-emerald-950/15">
+              <img id="featuredScreenImg" src="assets/screens/dashboard.png" alt="Featured App Screen" class="w-full h-auto object-contain transition-all duration-300" />
+            </div>
+
+            <!-- Ground 3D Shadow Ellipse -->
+            <div class="w-4/5 h-4 bg-slate-400/25 rounded-[100%] blur-md mx-auto mt-4"></div>
+          </div>
+          
+          <div class="mt-3 text-center">
+            <span class="text-[11px] font-mono text-emerald-700 font-bold tracking-wider px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+              TAMPILAN RESMI APLIKASI
+            </span>
+          </div>
+        </div>
+
+        <!-- Right: Screen Detail & 6 Cards Grid (7 cols) -->
+        <div class="lg:col-span-7 space-y-6">
+          
+          <!-- Detailed Explanation Card -->
+          <div class="glass-panel-light p-6 sm:p-7 rounded-3xl border-emerald-200 bg-white shadow-lg space-y-4">
+            <div class="flex items-center justify-between">
+              <span id="featuredScreenBadge" class="px-3.5 py-1 rounded-full text-xs font-mono bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
+                Layar 1 • Status Real-Time
+              </span>
+              <span class="text-xs font-mono text-slate-400 font-semibold">INTERACTIVE VIEW</span>
+            </div>
+
+            <h3 id="featuredScreenTitle" class="font-tech text-2xl font-bold text-slate-900">
+              Dashboard Kontrol Utama
+            </h3>
+
+            <p id="featuredScreenDesc" class="text-sm text-slate-600 leading-relaxed">
+              Menampilkan status telemetri robot secara komprehensif: persentase baterai 82%, kualitas sinyal GPS RTK, kecepatan bergerak 6.0 m/s, serta mode penanaman AUTO. Dilengkapi tombol cepat untuk mulai pemetaan, memilih sawah, dan kontrol manual.
+            </p>
+
+            <div class="pt-3 border-t border-slate-100">
+              <ul id="featuredScreenSpecs" class="space-y-2">
+                <li class="flex items-center space-x-2 text-xs font-mono text-slate-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                  <span>Visual indikator status koneksi real-time</span>
+                </li>
+                <li class="flex items-center space-x-2 text-xs font-mono text-slate-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                  <span>Speedometer & Battery gauge</span>
+                </li>
+                <li class="flex items-center space-x-2 text-xs font-mono text-slate-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                  <span>Akses cepat ke 3 mode operasional</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 6 Clickable Screen Cards Grid (Clean, Full Height, Proportional) -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            
+            <!-- Card 1: Dashboard -->
+            <div class="phone-card-3d phone-card-active p-3 rounded-2xl glass-panel-light bg-white border-slate-200 flex flex-col justify-between" data-screen-key="dashboard">
+              <div class="h-36 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center p-1.5 mb-2">
+                <img src="assets/screens/dashboard.png" alt="Dashboard" class="h-full w-auto object-contain rounded-lg" />
+              </div>
+              <div>
+                <div class="text-xs font-bold text-slate-900 truncate">1. Dashboard</div>
+                <div class="text-[10px] font-mono text-emerald-700 font-semibold truncate">Status & Mode</div>
+              </div>
+            </div>
+
+            <!-- Card 2: Mapping -->
+            <div class="phone-card-3d p-3 rounded-2xl glass-panel-light bg-white border-slate-200 flex flex-col justify-between" data-screen-key="mapping">
+              <div class="h-36 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center p-1.5 mb-2">
+                <img src="assets/screens/mapping.png" alt="Pemetaan" class="h-full w-auto object-contain rounded-lg" />
+              </div>
+              <div>
+                <div class="text-xs font-bold text-slate-900 truncate">2. Pemetaan</div>
+                <div class="text-[10px] font-mono text-cyan-700 font-semibold truncate">Batas GPS 3cm</div>
+              </div>
+            </div>
+
+            <!-- Card 3: Settings -->
+            <div class="phone-card-3d p-3 rounded-2xl glass-panel-light bg-white border-slate-200 flex flex-col justify-between" data-screen-key="settings">
+              <div class="h-36 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center p-1.5 mb-2">
+                <img src="assets/screens/settings.png" alt="Pengaturan" class="h-full w-auto object-contain rounded-lg" />
+              </div>
+              <div>
+                <div class="text-xs font-bold text-slate-900 truncate">3. Pengaturan</div>
+                <div class="text-[10px] font-mono text-amber-700 font-semibold truncate">Jarak & Spacing</div>
+              </div>
+            </div>
+
+            <!-- Card 4: Path Gen -->
+            <div class="phone-card-3d p-3 rounded-2xl glass-panel-light bg-white border-slate-200 flex flex-col justify-between" data-screen-key="path_gen">
+              <div class="h-36 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center p-1.5 mb-2">
+                <img src="assets/screens/path_gen.png" alt="Jalur Otomatis" class="h-full w-auto object-contain rounded-lg" />
+              </div>
+              <div>
+                <div class="text-xs font-bold text-slate-900 truncate">4. Jalur Tanam</div>
+                <div class="text-[10px] font-mono text-emerald-700 font-semibold truncate">Boustrophedon</div>
+              </div>
+            </div>
+
+            <!-- Card 5: Auto Mode -->
+            <div class="phone-card-3d p-3 rounded-2xl glass-panel-light bg-white border-slate-200 flex flex-col justify-between" data-screen-key="auto_mode">
+              <div class="h-36 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center p-1.5 mb-2">
+                <img src="assets/screens/auto_mode.png" alt="Mode Otomatis" class="h-full w-auto object-contain rounded-lg" />
+              </div>
+              <div>
+                <div class="text-xs font-bold text-slate-900 truncate">5. Mode Auto</div>
+                <div class="text-[10px] font-mono text-emerald-700 font-semibold truncate">Live Tracking</div>
+              </div>
+            </div>
+
+            <!-- Card 6: Report -->
+            <div class="phone-card-3d p-3 rounded-2xl glass-panel-light bg-white border-slate-200 flex flex-col justify-between" data-screen-key="report">
+              <div class="h-36 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center p-1.5 mb-2">
+                <img src="assets/screens/report.png" alt="Riwayat & Laporan" class="h-full w-auto object-contain rounded-lg" />
+              </div>
+              <div>
+                <div class="text-xs font-bold text-slate-900 truncate">6. Laporan</div>
+                <div class="text-[10px] font-mono text-purple-700 font-semibold truncate">SQLite Offline</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- LIVE FIELD MISSION SIMULATOR -->
+  <section id="simulator" class="py-20 bg-fresh-mesh border-b border-slate-200 relative">
+    <div class="max-w-6xl mx-auto px-4">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
+        <div>
+          <div class="inline-flex items-center space-x-2 text-xs font-mono text-emerald-700 font-bold mb-2">
+            <i data-lucide="terminal" class="w-4 h-4"></i>
+            <span>INTERACTIVE MISSION PLANNER SIMULATOR</span>
+          </div>
+          <h2 class="font-tech text-3xl sm:text-4xl font-bold text-slate-900">
+            Simulasi Jalur Tanam <span class="text-gradient-emerald-cyan">Boustrophedon</span>
+          </h2>
+          <p class="text-sm text-slate-600 mt-2 max-w-xl">
+            Coba langsung algoritma penanaman padi otonom di kanvas browser. Buat poligon sawah atau pilih preset lahan, lalu jalankan robot.
+          </p>
+        </div>
+
+        <!-- Controls: Preset & Pola Jalur Tanam Cerdas -->
+        <div class="mt-4 md:mt-0 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <!-- Preset Selector -->
+          <div class="flex items-center space-x-1.5">
+            <span class="text-xs font-mono text-slate-500 font-semibold mr-1">Lahan:</span>
+            <button id="btnPresetRect" class="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-emerald-600 text-white border border-emerald-600 shadow-sm transition-all">
+              Kotak (20x30m)
+            </button>
+            <button id="btnPresetContour" class="px-3 py-1.5 rounded-xl text-xs font-mono font-medium bg-white text-slate-700 border border-slate-300 hover:border-slate-400 transition-all">
+              Terasering
+            </button>
+          </div>
+
+          <!-- Pola Jalur Tanam Cerdas Selector -->
+          <div class="flex items-center space-x-1.5">
+            <span class="text-xs font-mono text-slate-500 font-semibold mr-1">Pola:</span>
+            <button id="btnPatternBoustrophedon" class="pattern-select-btn px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold bg-emerald-600 text-white border border-emerald-600 shadow-sm transition-all" data-pattern="boustrophedon">
+              1. Persegi
+            </button>
+            <button id="btnPatternAdaptive" class="pattern-select-btn px-2.5 py-1.5 rounded-xl text-xs font-mono font-medium bg-white text-slate-700 border border-slate-300 hover:border-slate-400 transition-all" data-pattern="adaptive">
+              2. Adaptif
+            </button>
+            <button id="btnPatternSpiral" class="pattern-select-btn px-2.5 py-1.5 rounded-xl text-xs font-mono font-medium bg-white text-slate-700 border border-slate-300 hover:border-slate-400 transition-all" data-pattern="spiral">
+              3. Spiral
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulator Layout Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Canvas Viewport (8 cols) -->
+        <div class="lg:col-span-8 glass-panel-light p-4 rounded-3xl relative overflow-hidden flex flex-col border-slate-200 shadow-md">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-200 mb-3 text-xs font-mono">
+            <div class="flex items-center space-x-2 text-slate-600 font-semibold">
+              <i data-lucide="crosshair" class="w-4 h-4 text-emerald-600"></i>
+              <span>FIELD SIMULATOR v1.1</span>
+            </div>
+            <div class="flex items-center space-x-3">
+              <span class="text-slate-500">Rover State:</span>
+              <span id="simStatusBadge" class="px-2.5 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-600 border border-slate-300">IDLE</span>
+            </div>
+          </div>
+
+          <div class="relative flex-1 min-h-[380px] sm:min-h-[420px] w-full rounded-2xl overflow-hidden bg-[#F8FCF9] border border-emerald-100 shadow-inner">
+            <canvas id="fieldCanvas" class="w-full h-full block"></canvas>
+            <div class="absolute bottom-3 left-3 pointer-events-none px-3 py-1.5 rounded-xl bg-white/90 backdrop-blur border border-slate-200 text-[11px] font-mono text-slate-600 shadow-sm">
+              💡 Klik canvas untuk tambah titik batas • Klik titik awal P1 untuk menutup bidang
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-2">
+              <button id="btnSimStart" class="btn-fresh-glow px-4 py-2 rounded-xl text-xs font-bold text-white flex items-center space-x-1.5">
+                <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+                <span>Mulai Misi</span>
+              </button>
+              <button id="btnSimPause" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm flex items-center space-x-1.5 transition-all">
+                <i data-lucide="pause" class="w-3.5 h-3.5"></i>
+                <span>Pause</span>
+              </button>
+              <button id="btnSimEstop" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100 flex items-center space-x-1.5 transition-all">
+                <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
+                <span>E-STOP</span>
+              </button>
+              <button id="btnSimClear" class="px-3.5 py-2 rounded-xl text-xs font-mono text-slate-500 hover:text-slate-800 bg-white border border-slate-200 hover:border-slate-300 shadow-sm transition-all">
+                Reset
+              </button>
+            </div>
+
+            <div class="flex items-center space-x-1.5 text-xs font-mono text-slate-600">
+              <span class="font-semibold">Kecepatan:</span>
+              <button class="sim-speed-btn px-2.5 py-1 rounded-lg bg-emerald-600 text-white border border-emerald-600 text-xs font-bold shadow-sm" data-speed="1">1x</button>
+              <button class="sim-speed-btn px-2.5 py-1 rounded-lg bg-white text-slate-700 border border-slate-200 hover:border-slate-300 text-xs shadow-sm" data-speed="2">2x</button>
+              <button class="sim-speed-btn px-2.5 py-1 rounded-lg bg-white text-slate-700 border border-slate-200 hover:border-slate-300 text-xs shadow-sm" data-speed="4">4x</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Telemetry Metrics (4 cols) -->
+        <div class="lg:col-span-4 flex flex-col space-y-4">
+          <div class="glass-panel-light p-5 rounded-3xl space-y-4 border-slate-200 shadow-md">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+              <h3 class="font-tech text-sm font-bold text-slate-900 flex items-center space-x-2">
+                <i data-lucide="activity" class="w-4 h-4 text-emerald-600"></i>
+                <span>Live Mission Telemetry</span>
+              </h3>
+              <span class="text-[10px] font-mono text-emerald-700 font-bold">● 50 Hz UPDATE</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                <div class="text-[11px] font-mono text-slate-500 font-medium">Bibit Tertanam</div>
+                <div id="simSeedlingCount" class="text-2xl font-mono font-bold text-emerald-700 mt-0.5">0</div>
+              </div>
+              <div class="p-3.5 rounded-2xl bg-cyan-50/60 border border-cyan-100">
+                <div class="text-[11px] font-mono text-slate-500 font-medium">Progress Misi</div>
+                <div id="simProgressPct" class="text-2xl font-mono font-bold text-cyan-700 mt-0.5">0%</div>
+              </div>
+              <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                <div class="text-[11px] font-mono text-slate-500 font-medium">Luas Cakupan</div>
+                <div id="simAreaCovered" class="text-xl font-mono font-bold text-slate-900 mt-0.5">0.0 m²</div>
+              </div>
+              <div class="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-100">
+                <div class="text-[11px] font-mono text-slate-500 font-medium">Kecepatan Traktor</div>
+                <div id="simRoverSpeed" class="text-xl font-mono font-bold text-amber-700 mt-0.5">0.0 km/h</div>
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1 text-xs font-mono">
+              <div class="flex justify-between text-slate-500 text-[11px]">
+                <span class="font-medium">GPS Coordinates (WGS84):</span>
+                <span class="text-emerald-700 font-bold">RTK FIX</span>
+              </div>
+              <div id="simRoverCoords" class="text-slate-900 font-bold">-6.914744, 107.609810</div>
+            </div>
+          </div>
+
+          <div class="glass-panel-light p-5 rounded-3xl flex-1 space-y-3 border-slate-200 shadow-md">
+            <h4 class="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider">Status Hardware Real-Time</h4>
+            <div class="space-y-2 text-xs font-mono">
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-100">
+                <span class="text-slate-600 flex items-center space-x-2">
+                  <i data-lucide="battery" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  <span>Baterai Utama (24V LiFePO4)</span>
+                </span>
+                <span id="telemBattVolt" class="text-emerald-700 font-bold">24.8V</span>
+              </div>
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-100">
+                <span class="text-slate-600 flex items-center space-x-2">
+                  <i data-lucide="thermometer" class="w-3.5 h-3.5 text-amber-600"></i>
+                  <span>Suhu Driver Motor IBT-2</span>
+                </span>
+                <span id="telemMotorTemp" class="text-amber-700 font-bold">32.4°C</span>
+              </div>
+              <div class="flex items-center justify-between py-1.5">
+                <span class="text-slate-600 flex items-center space-x-2">
+                  <i data-lucide="radio" class="w-3.5 h-3.5 text-cyan-600"></i>
+                  <span>Latensi Telemetri (ESP32)</span>
+                </span>
+                <span id="telemPing" class="text-cyan-700 font-bold">14ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ROBOT 3D SCHEMATICS & HOTSPOT INSPECTOR -->
+  <section id="schematics" class="py-24 relative overflow-hidden bg-white/80">
+    <div class="max-w-6xl mx-auto px-4">
+      
+      <div class="text-center max-w-2xl mx-auto mb-16">
+        <div class="inline-flex items-center space-x-2 text-xs font-mono text-cyan-700 font-bold mb-2">
+          <i data-lucide="cpu" class="w-4 h-4"></i>
+          <span>3D ROBOTICS SPECIFICATION</span>
+        </div>
+        <h2 class="font-tech text-3xl sm:text-5xl font-bold text-slate-900">
+          Anatomi Mesin Robot <span class="text-gradient-emerald-cyan">PadiBot 3D</span>
+        </h2>
+        <p class="text-sm text-slate-600 mt-3">
+          Klik titik nomor inspeksi pada model 3D mesin untuk meninjau spesifikasi modul antena, kontroler, mekanisme tanam, dan motor penggerak.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        
+        <!-- 3D Model Visualizer with Hotspots (7 cols) -->
+        <div class="lg:col-span-7 glass-panel-light p-6 rounded-3xl relative overflow-hidden border-slate-200 shadow-xl bg-white">
+          <div class="text-xs font-mono text-slate-500 mb-4 flex items-center justify-between font-semibold">
+            <span>3D ROBOT RENDER VIEW</span>
+            <span class="text-emerald-700 font-bold">PADIBOT AGRI-ROV MK-II</span>
+          </div>
+
+          <div class="relative bg-slate-50 rounded-2xl p-4 border border-slate-200 flex items-center justify-center shadow-inner">
+            <img src="assets/screens/robot_3d_clean.png" alt="PadiBot 3D Robot Render" class="w-full h-auto max-h-[380px] object-contain" />
+
+            <!-- Hotspot 1: GNSS RTK Antenna -->
+            <button class="hotspot-btn absolute top-[14%] left-[45%] w-8 h-8 rounded-full bg-cyan-600 text-white font-bold border-2 border-white flex items-center justify-center text-xs font-mono shadow-lg hover:scale-110 transition-transform" data-hotspot="gps" title="Antena GNSS RTK">
+              1
+            </button>
+
+            <!-- Hotspot 2: Panel Kontrol Arduino -->
+            <button class="hotspot-btn absolute top-[40%] left-[34%] w-9 h-9 rounded-full bg-emerald-600 text-white font-bold border-2 border-white flex items-center justify-center text-xs font-mono shadow-lg ring-4 ring-emerald-400 hover:scale-110 transition-transform" data-hotspot="mcu" title="Panel Kontrol">
+              2
+            </button>
+
+            <!-- Hotspot 3: Emergency Stop Button -->
+            <button class="hotspot-btn absolute top-[36%] left-[28%] w-7 h-7 rounded-full bg-rose-600 text-white font-bold border-2 border-white flex items-center justify-center text-xs font-mono shadow-lg hover:scale-110 transition-transform" data-hotspot="estop" title="Emergency Stop">
+              3
+            </button>
+
+            <!-- Hotspot 4: Mekanisme Tanam & Tray Bibit -->
+            <button class="hotspot-btn absolute top-[45%] right-[22%] w-8 h-8 rounded-full bg-emerald-600 text-white font-bold border-2 border-white flex items-center justify-center text-xs font-mono shadow-lg hover:scale-110 transition-transform" data-hotspot="planter" title="Mekanisme Tanam">
+              4
+            </button>
+
+            <!-- Hotspot 5: Motor Penggerak & Kemudi -->
+            <button class="hotspot-btn absolute bottom-[18%] left-[38%] w-8 h-8 rounded-full bg-amber-500 text-white font-bold border-2 border-white flex items-center justify-center text-xs font-mono shadow-lg hover:scale-110 transition-transform" data-hotspot="motor" title="Motor Penggerak">
+              5
+            </button>
+          </div>
+
+          <!-- Hotspot Legend -->
+          <div class="mt-4 flex flex-wrap gap-2 text-[11px] font-mono text-slate-600 justify-center">
+            <span class="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 font-medium">1. Antena GNSS RTK</span>
+            <span class="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 font-medium">2. Arduino Core</span>
+            <span class="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 font-medium">3. E-STOP</span>
+            <span class="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 font-medium">4. Tray Bibit</span>
+            <span class="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 font-medium">5. Motor Penggerak</span>
+          </div>
+
+        </div>
+
+        <!-- Hotspot Detail Card (5 cols) -->
+        <div class="lg:col-span-5">
+          <div class="glass-panel-light p-8 rounded-3xl space-y-5 border-emerald-200 shadow-xl relative bg-white">
+            <div class="flex items-center justify-between">
+              <span id="inspectorBadge" class="px-3.5 py-1 rounded-full text-xs font-mono bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
+                Main Processing Unit
+              </span>
+              <span class="text-xs font-mono text-slate-400 font-semibold">3D INSPECTOR</span>
+            </div>
+
+            <h3 id="inspectorTitle" class="font-tech text-2xl font-bold text-slate-900">
+              Panel Kontrol Arduino Mega 2560 & ESP32
+            </h3>
+
+            <p id="inspectorDesc" class="text-sm text-slate-600 leading-relaxed">
+              Otak utama robot yang memproses navigasi otonom, kendali motor driver, encoder roda traktor, dan telemetri nirkabel ke smartphone.
+            </p>
+
+            <div class="pt-4 border-t border-slate-100 space-y-2">
+              <h4 class="text-xs font-mono text-slate-500 font-bold uppercase">Spesifikasi Kunci:</h4>
+              <ul id="inspectorSpecs" class="space-y-2">
+                <li class="flex items-center space-x-2 text-xs font-mono text-slate-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                  <span>16 MHz ATmega2560 Master Core</span>
+                </li>
+                <li class="flex items-center space-x-2 text-xs font-mono text-slate-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                  <span>Dual-Core 240MHz ESP32 WiFi/BLE</span>
+                </li>
+                <li class="flex items-center space-x-2 text-xs font-mono text-slate-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                  <span>54 Digital I/O (15 PWM pins)</span>
+                </li>
+                <li class="flex items-center space-x-2 text-xs font-mono text-slate-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                  <span>4 Hardware UART Serial Ports</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="pt-2">
+              <a href="https://github.com/adimaryanto-stack/Padi-Bot" target="_blank" class="inline-flex items-center space-x-2 text-xs font-mono text-emerald-700 font-bold hover:text-emerald-800">
+                <span>Pelajari kode firmware C/C++ di GitHub</span>
+                <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- COVERAGE PATH PLANNING ALGORITHMS -->
+  <section id="patterns" class="py-20 bg-fresh-mesh border-t border-slate-200">
+    <div class="max-w-6xl mx-auto px-4">
+      
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <div class="inline-flex items-center space-x-2 text-xs font-mono text-emerald-700 font-bold mb-2">
+          <i data-lucide="git-merge" class="w-4 h-4"></i>
+          <span>COVERAGE PATH PLANNING</span>
+        </div>
+        <h2 class="font-tech text-3xl sm:text-4xl font-bold text-slate-900">
+          3 Pola Jalur Tanam Cerdas
+        </h2>
+        <p class="text-sm text-slate-600 mt-2">
+          PadiBot mendukung berbagai bentuk lahan sawah dengan strategi putar headland otomatis untuk efisiensi bahan bakar dan bibit.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div class="glass-panel-light p-6 rounded-3xl bg-white border-emerald-100 shadow-md space-y-4">
+          <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 aspect-[4/3] flex items-center justify-center p-2">
+            <img src="assets/screens/path_rect.png" alt="Pola Persegi Panjang" class="w-full h-full object-contain" />
+          </div>
+          <h3 class="font-tech text-xl font-bold text-slate-900">1. Sawah Persegi Panjang</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Pola Boustrophedon standar dengan lintasan lurus bolak-balik yang paling efisien untuk petak sawah simetris.
+          </p>
+        </div>
+
+        <div class="glass-panel-light p-6 rounded-3xl bg-white border-cyan-100 shadow-md space-y-4">
+          <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 aspect-[4/3] flex items-center justify-center p-2">
+            <img src="assets/screens/path_irregular.png" alt="Pola Tidak Beraturan" class="w-full h-full object-contain" />
+          </div>
+          <h3 class="font-tech text-xl font-bold text-slate-900">2. Bentuk Tidak Beraturan</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Algoritma poligon adaptif yang menyesuaikan sudut tikungan untuk sawah miring atau kontur perbukitan.
+          </p>
+        </div>
+
+        <div class="glass-panel-light p-6 rounded-3xl bg-white border-amber-100 shadow-md space-y-4">
+          <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 aspect-[4/3] flex items-center justify-center p-2">
+            <img src="assets/screens/path_headland.png" alt="Pola Headland Spiral" class="w-full h-full object-contain" />
+          </div>
+          <h3 class="font-tech text-xl font-bold text-slate-900">3. Strategi Headland (Pola Spiral)</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Pola konsentris spiral (obat nyamuk) mulai menanam dari titik tengah lahan, lalu berputar melingkar keluar hingga memenuhi seluruh sawah tanpa manuver putar tajam.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- Legend Bar (Matched with PadiBot Concept) -->
+      <div class="mt-8 max-w-2xl mx-auto p-3.5 rounded-2xl glass-panel-light bg-white border border-slate-200 shadow-sm flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs font-mono text-slate-700">
+        <div class="flex items-center space-x-2">
+          <span class="w-4 h-1 bg-emerald-500 rounded-full"></span>
+          <span class="font-medium">Jalur Tanam</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="w-4 h-1 bg-amber-500 rounded-full"></span>
+          <span class="font-medium">Area Putar / Headland</span>
+        </div>
+        <div class="flex items-center space-x-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white shadow-sm"></span>
+          <span class="font-medium">Titik Start</span>
+        </div>
+        <div class="flex items-center space-x-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-red-500 border border-white shadow-sm"></span>
+          <span class="font-medium">Titik End</span>
+        </div>
+        <div class="flex items-center space-x-1.5 text-slate-500">
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span class="font-medium">Arah Gerak</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FAQ SECTION -->
+  <section id="faq" class="py-20 bg-white/80 border-t border-slate-200">
+    <div class="max-w-4xl mx-auto px-4">
+      
+      <div class="text-center mb-14">
+        <div class="inline-flex items-center space-x-2 text-xs font-mono text-emerald-700 font-bold mb-2">
+          <i data-lucide="help-circle" class="w-4 h-4"></i>
+          <span>FAQ & DOKUMENTASI</span>
+        </div>
+        <h2 class="font-tech text-3xl sm:text-4xl font-bold text-slate-900">
+          Pertanyaan yang Sering Diajukan
+        </h2>
+      </div>
+
+      <div class="space-y-4">
+        
+        <div class="faq-item glass-panel-light rounded-2xl p-5 cursor-pointer bg-white border-slate-200 shadow-sm">
+          <div class="faq-header flex items-center justify-between">
+            <h3 class="font-tech text-base font-bold text-slate-900">Apakah PadiBot bisa bekerja tanpa sinyal internet di sawah?</h3>
+            <i data-lucide="chevron-down" class="faq-icon w-5 h-5 text-slate-400 transition-transform"></i>
+          </div>
+          <div class="faq-content hidden mt-3 pt-3 border-t border-slate-100 text-sm text-slate-600 leading-relaxed">
+            Ya, 100% bisa. Aplikasi Android PadiBot didesain <em>offline-first</em> dengan database SQLite lokal. Komunikasi langsung ke robot menggunakan WiFi lokal (Access Point dari ESP32) atau Bluetooth BLE tanpa memerlukan paket data seluler atau router eksternal.
+          </div>
+        </div>
+
+        <div class="faq-item glass-panel-light rounded-2xl p-5 cursor-pointer bg-white border-slate-200 shadow-sm">
+          <div class="faq-header flex items-center justify-between">
+            <h3 class="font-tech text-base font-bold text-slate-900">Berapa akurasi modul GPS yang digunakan?</h3>
+            <i data-lucide="chevron-down" class="faq-icon w-5 h-5 text-slate-400 transition-transform"></i>
+          </div>
+          <div class="faq-content hidden mt-3 pt-3 border-t border-slate-100 text-sm text-slate-600 leading-relaxed">
+            Untuk modul standar u-blox NEO-6M/8M akurasi berkisar 1.5 - 2.5 meter. Untuk penanaman otonom presisi tinggi berjarak legowo rapi, sistem mendukung modul <strong>RTK GNSS (u-blox ZED-F9P)</strong> dengan akurasi sentimeter (±2.5 cm).
+          </div>
+        </div>
+
+        <div class="faq-item glass-panel-light rounded-2xl p-5 cursor-pointer bg-white border-slate-200 shadow-sm">
+          <div class="faq-header flex items-center justify-between">
+            <h3 class="font-tech text-base font-bold text-slate-900">Bagaimana cara memasang firmware Arduino ke robot?</h3>
+            <i data-lucide="chevron-down" class="faq-icon w-5 h-5 text-slate-400 transition-transform"></i>
+          </div>
+          <div class="faq-content hidden mt-3 pt-3 border-t border-slate-100 text-sm text-slate-600 leading-relaxed">
+            Firmware disediakan secara open-source di repository GitHub kami. Anda cukup membuka file proyek menggunakan <strong>PlatformIO</strong> atau <strong>Arduino IDE</strong>, lalu meng-upload kode `.ino` ke Arduino Mega via kabel USB.
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="pt-16 pb-12 border-t border-slate-200 bg-white relative">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-8 pb-12 border-b border-slate-200">
+        
+        <div class="md:col-span-2 space-y-4">
+          <div class="flex items-center space-x-3">
+            <img src="assets/ic_padibot_logo.jpg" alt="PadiBot Logo" class="w-9 h-9 rounded-xl object-cover shadow-sm border border-emerald-300" />
+            <span class="font-tech text-xl font-bold tracking-wider text-slate-900">PADI<span class="text-emerald-600">BOT</span></span>
+          </div>
+          <p class="text-xs text-slate-500 max-w-sm leading-relaxed">
+            Platform pertanian presisi otonom untuk memodernisasi sawah Indonesia. Terbuka, tangguh, dan dapat diadaptasi untuk berbagai mesin tanam mekanis.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-mono text-slate-900 font-bold uppercase tracking-wider mb-4">Navigasi</h4>
+          <ul class="space-y-2 text-xs text-slate-600 font-mono">
+            <li><a href="#overview" class="hover:text-emerald-600">Home</a></li>
+            <li><a href="#app-showcase" class="hover:text-emerald-600">Showcase</a></li>
+            <li><a href="#simulator" class="hover:text-emerald-600">Live Simulator</a></li>
+            <li><a href="#schematics" class="hover:text-emerald-600">Specs</a></li>
+            <li><a href="#patterns" class="hover:text-emerald-600">Pola Jalur</a></li>
+            <li><a href="#faq" class="hover:text-emerald-600">FAQ</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-mono text-slate-900 font-bold uppercase tracking-wider mb-4">Ecosystem</h4>
+          <ul class="space-y-2 text-xs text-slate-600 font-mono">
+            <li><a href="https://github.com/adimaryanto-stack/Padi-Bot" target="_blank" class="hover:text-emerald-600">GitHub Repository</a></li>
+            <li><a href="#" class="download-trigger-btn hover:text-emerald-600">Android APK Build</a></li>
+            <li><a href="#" class="download-trigger-btn hover:text-emerald-600">Arduino Firmware (.ino)</a></li>
+          </ul>
+        </div>
+
+      </div>
+
+      <div class="pt-8 flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-slate-500 gap-4">
+        <div>© 2026 PadiBot Autonomous Agriculture. MIT License.</div>
+        <div class="flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span>INTERAKTIF 3D SCREENSHOWCASE & REAL ASSETS</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- FLOATING WHATSAPP BUTTON (LEFT SIDE) -->
+  <a href="https://wa.me/6287881527804?text=Saya%20tertarik%20dengan%20Padi%20Bot,%20apakah%20kita%20bisa%20bekerjasama.%20Nama%20saya%20..." target="_blank" rel="noopener noreferrer" id="floatingWhatsApp" class="fixed bottom-6 left-6 z-50 flex items-center group cursor-pointer" title="Konsultasi via WhatsApp">
+    <span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
+    <div class="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white flex items-center justify-center shadow-lg shadow-emerald-900/20 group-hover:scale-110 transition-transform duration-300">
+      <svg class="w-6 h-6 sm:w-7 sm:h-7 fill-current" viewBox="0 0 24 24">
+        <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0012.04 2m.01 1.67c4.56 0 8.25 3.69 8.25 8.24 0 2.2-.86 4.28-2.42 5.83a8.19 8.19 0 01-5.83 2.42c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 01-1.26-4.39c0-4.55 3.69-8.24 8.25-8.24m4.52 11.66c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.02-1.25-.75-.67-1.26-1.5-1.41-1.75-.14-.25-.02-.39.11-.51.11-.11.25-.29.38-.44.13-.14.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.34-.76-1.84-.2-.49-.4-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1 0 1.24.9 2.45 1.03 2.61.13.17 1.78 2.72 4.31 3.81.6.26 1.07.42 1.44.54.61.19 1.16.17 1.6.1.49-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.11-.23-.17-.48-.3z"></path>
+      </svg>
+    </div>
+    <span class="hidden sm:inline-block ml-3 px-3.5 py-1.5 rounded-xl bg-white/95 backdrop-blur border border-emerald-200 text-xs font-mono font-bold text-slate-800 shadow-md group-hover:shadow-lg transition-all">
+      Konsultasi WhatsApp
+    </span>
+  </a>
+
+  <!-- Circular Progress Scroll to Top Button (adigue style) -->
+  <div id="scrollTopBtn" class="scroll-top-progress" title="Kembali ke atas">
+    <svg class="scroll-progress-svg" viewBox="0 0 48 48">
+      <circle class="scroll-progress-bg" cx="24" cy="24" r="22"></circle>
+      <circle id="scrollProgressBar" class="scroll-progress-bar" cx="24" cy="24" r="22"></circle>
+    </svg>
+    <i data-lucide="arrow-up" class="w-4 h-4 relative z-10"></i>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/field-simulator.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
