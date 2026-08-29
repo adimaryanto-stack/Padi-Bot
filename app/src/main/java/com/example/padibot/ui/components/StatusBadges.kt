@@ -1,13 +1,10 @@
 package com.example.padibot.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,98 +14,60 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.padibot.model.ConnectionType
-import com.example.padibot.model.GpsStatus
 import com.example.padibot.model.MissionStatus
 import com.example.padibot.theme.*
 
 @Composable
-fun MissionStatusBadge(status: MissionStatus, modifier: Modifier = Modifier) {
-    val (bgColor, textColor) = when (status) {
-        MissionStatus.DRAFT -> Pair(Color(0xFFEEEEEE), Color(0xFF616161))
-        MissionStatus.READY -> Pair(Color(0xFFE3F2FD), Color(0xFF1565C0))
-        MissionStatus.RUNNING -> Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))
-        MissionStatus.PAUSED -> Pair(Color(0xFFFFF3E0), Color(0xFFE65100))
-        MissionStatus.COMPLETED -> Pair(Color(0xFFDCEDC8), Color(0xFF33691E))
-        MissionStatus.STOPPED -> Pair(Color(0xFFFFEBEE), Color(0xFFC62828))
-        MissionStatus.ERROR -> Pair(Color(0xFFF3E5F5), Color(0xFF6A1B9A))
-    }
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(bgColor)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = status.label.uppercase(),
-            color = textColor,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-fun ConnectionBadge(
-    connectionType: ConnectionType,
-    isConnected: Boolean,
-    modifier: Modifier = Modifier
+fun GpsStatusBadge(
+    gpsStatus: String,
+    accuracyM: Double
 ) {
-    val (dotColor, text) = if (isConnected) {
-        Pair(SuccessGreen, when (connectionType) {
-            ConnectionType.SIMULATOR -> "Simulator Aktif"
-            ConnectionType.WIFI -> "WiFi ESP Terhubung"
-            ConnectionType.BLUETOOTH -> "Bluetooth Terhubung"
-            ConnectionType.GSM_MQTT -> "GSM 4G Terhubung"
-        })
-    } else {
-        Pair(ErrorRed, "Terputus")
-    }
-
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+    val isRtk = gpsStatus.contains("RTK", ignoreCase = true)
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isRtk) Green100 else WarningOrange.copy(alpha = 0.2f)
     ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(dotColor)
-        )
-        Text(
-            text = " $text",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (isRtk) SuccessGreen else WarningOrange)
+            )
+            Text(
+                text = "$gpsStatus (±${String.format("%.2f", accuracyM)}m)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isRtk) Green800 else Gray900
+            )
+        }
     }
 }
 
 @Composable
-fun GpsStatusBadge(gpsStatus: GpsStatus, accuracyM: Float, modifier: Modifier = Modifier) {
-    val isGood = gpsStatus != GpsStatus.NONE && accuracyM <= 2.5f
-    val (bgColor, textColor) = if (isGood) {
-        Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))
-    } else {
-        Pair(Color(0xFFFFF3E0), Color(0xFFE65100))
+fun MissionStatusBadge(status: MissionStatus) {
+    val (bg, fg) = when (status) {
+        MissionStatus.READY -> Pair(Green100, Green800)
+        MissionStatus.RUNNING -> Pair(InfoBlue.copy(alpha = 0.15f), InfoBlue)
+        MissionStatus.PAUSED -> Pair(WarningOrange.copy(alpha = 0.15f), WarningOrange)
+        MissionStatus.COMPLETED -> Pair(Green100, SuccessGreen)
+        MissionStatus.STOPPED, MissionStatus.ERROR -> Pair(ErrorRed.copy(alpha = 0.15f), ErrorRed)
     }
 
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(bgColor)
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = bg
     ) {
         Text(
-            text = "${gpsStatus.label} (±${String.format("%.1f", accuracyM)}m)",
-            color = textColor,
+            text = status.label,
+            color = fg,
             fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }

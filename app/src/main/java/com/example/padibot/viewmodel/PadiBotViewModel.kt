@@ -9,6 +9,7 @@ import com.example.padibot.algorithm.RoutePlanner
 import com.example.padibot.data.local.PadiBotDatabase
 import com.example.padibot.data.repository.PadiBotRepository
 import com.example.padibot.model.*
+import com.example.padibot.service.FirebaseRealtimeService
 import com.example.padibot.service.MachineService
 import com.example.padibot.service.ManualDirection
 import kotlinx.coroutines.flow.*
@@ -31,26 +32,26 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedField = MutableStateFlow<Field?>(null)
     val selectedField: StateFlow<Field?> = _selectedField.asStateFlow()
 
-    // Route & Planting parameters (PRD & preview.webp)
-    private val _rowSpacingCm = MutableStateFlow(30.0) // Jarak Antar Baris: 30 cm
+    // Route & Planting parameters
+    private val _rowSpacingCm = MutableStateFlow(30.0)
     val rowSpacingCm: StateFlow<Double> = _rowSpacingCm.asStateFlow()
 
-    private val _plantSpacingCm = MutableStateFlow(20.0) // Jarak Antar Tanaman: 20 cm
+    private val _plantSpacingCm = MutableStateFlow(20.0)
     val plantSpacingCm: StateFlow<Double> = _plantSpacingCm.asStateFlow()
 
-    private val _machineWidth = MutableStateFlow(1.20) // Lebar Mesin (Kerja Efektif): 120 cm
+    private val _machineWidth = MutableStateFlow(1.20)
     val machineWidth: StateFlow<Double> = _machineWidth.asStateFlow()
 
-    private val _speedMps = MutableStateFlow(0.8) // Kecepatan Mesin: 0.8 m/s
+    private val _speedMps = MutableStateFlow(0.8)
     val speedMps: StateFlow<Double> = _speedMps.asStateFlow()
 
-    private val _headlandWidth = MutableStateFlow(1.50) // Area Putar (Headland): 1.5 m
+    private val _headlandWidth = MutableStateFlow(1.50)
     val headlandWidth: StateFlow<Double> = _headlandWidth.asStateFlow()
 
     private val _laneOrientation = MutableStateFlow(0.0)
     val laneOrientation: StateFlow<Double> = _laneOrientation.asStateFlow()
 
-    private val _isDarkTheme = MutableStateFlow(false) // Default to Versi Light (Terang)
+    private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
     fun setDarkTheme(isDark: Boolean) {
@@ -77,8 +78,10 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
 
     // Active Mission Execution
     val activeMission: StateFlow<Mission?> = machineService.activeMission
+    val missionStatus: StateFlow<MissionStatus> = machineService.missionStatus
     val activeMissionStatus: StateFlow<MissionStatus> = machineService.missionStatus
     val telemetry: StateFlow<Telemetry> = machineService.telemetry
+    val isConnected: StateFlow<Boolean> = machineService.isConnected
     val isMachineConnected: StateFlow<Boolean> = machineService.isConnected
     val machineSettings: StateFlow<MachineSettings> = machineService.settings
     val emergencyStopTriggered = machineService.emergencyStopTriggered
@@ -88,7 +91,6 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
             repository.seedInitialDataIfNeeded()
         }
 
-        // Auto-select first field if none selected
         viewModelScope.launch {
             allFields.collectLatest { fields ->
                 if (_selectedField.value == null && fields.isNotEmpty()) {
@@ -98,21 +100,18 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        // Real-time telemetry sync to Firebase Cloud
         viewModelScope.launch {
             telemetry.collectLatest { t ->
                 firebaseService.pushTelemetry(t)
             }
         }
 
-        // Active mission sync to Firebase Cloud
         viewModelScope.launch {
             activeMission.collectLatest { m ->
                 firebaseService.syncActiveMission(m)
             }
         }
 
-        // Listen for remote cloud commands from Firebase
         firebaseService.listenForRemoteCommands { dir, speed ->
             sendManualCommand(dir, speed)
         }
@@ -123,9 +122,17 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         recalculateRoute()
     }
 
+    fun updatePattern(pattern: RoutePattern) {
+        setSelectedPattern(pattern)
+    }
+
     fun setSelectedPattern(pattern: RoutePattern) {
         _selectedPattern.value = pattern
         recalculateRoute()
+    }
+
+    fun updateMachineWidth(width: Double) {
+        setMachineWidth(width)
     }
 
     fun setMachineWidth(width: Double) {
@@ -133,13 +140,25 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         recalculateRoute()
     }
 
+    fun updateHeadlandWidth(headland: Double) {
+        setHeadlandWidth(headland)
+    }
+
     fun setHeadlandWidth(headland: Double) {
         _headlandWidth.value = headland.coerceIn(0.5, 10.0)
         recalculateRoute()
     }
 
+    fun updateLaneOrientation(orientation: Double) {
+        setLaneOrientation(orientation)
+    }
+
     fun setLaneOrientation(orientation: Double) {
         _laneOrientation.value = (orientation % 360.0 + 360.0) % 360.0
+        recalculateRoute()
+    }
+
+    fun generateRoute() {
         recalculateRoute()
     }
 
@@ -232,6 +251,10 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun pauseMission() {
+        pauseMissionExecution()
+    }
+
     fun pauseMissionExecution() {
         val mission = activeMission.value ?: return
         machineService.pauseMission()
@@ -241,6 +264,10 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun resumeMission() {
+        resumeMissionExecution()
+    }
+
     fun resumeMissionExecution() {
         val mission = activeMission.value ?: return
         machineService.resumeMission()
@@ -248,6 +275,10 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
             repository.updateMissionStatus(mission.id, MissionStatus.RUNNING)
             repository.logEvent(mission.id, "RESUME", "Misi dilanjutkan", "INFO")
         }
+    }
+
+    fun stopMission() {
+        stopMissionExecution()
     }
 
     fun stopMissionExecution() {
@@ -260,16 +291,20 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun triggerEmergencyStop() {
+    fun emergencyStop(reason: String = "Tombol Berhenti Darurat Ditekan") {
         val mission = activeMission.value
-        machineService.emergencyStop("Tombol Berhenti Darurat Ditekan")
+        machineService.emergencyStop(reason)
         if (mission != null) {
             viewModelScope.launch {
                 val currentProgress = telemetry.value.missionProgressPct.toDouble()
                 repository.updateMissionStatus(mission.id, MissionStatus.STOPPED, currentProgress)
-                repository.logEvent(mission.id, "E_STOP", "EMERGENCY STOP DIAKTIFKAN", "CRITICAL")
+                repository.logEvent(mission.id, "E_STOP", "EMERGENCY STOP: $reason", "CRITICAL")
             }
         }
+    }
+
+    fun triggerEmergencyStop() {
+        emergencyStop("Tombol Berhenti Darurat Ditekan")
     }
 
     fun sendManualCommand(direction: ManualDirection, speedFactor: Float) {
@@ -278,6 +313,10 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateMachineSettings(settings: MachineSettings) {
         machineService.updateSettings(settings)
+    }
+
+    fun injectError(errorType: String) {
+        injectSimulatorError(errorType)
     }
 
     fun injectSimulatorError(errorType: String) {
@@ -293,10 +332,24 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun clearAllUserData() {
+    fun getEventsForMission(missionId: String): Flow<List<MissionEvent>> {
+        return repository.getEvents(missionId)
+    }
+
+    fun resetSampleData() {
         viewModelScope.launch {
             repository.clearAllData()
             repository.seedInitialDataIfNeeded()
         }
+    }
+
+    fun clearAllData() {
+        viewModelScope.launch {
+            repository.clearAllData()
+        }
+    }
+
+    fun clearAllUserData() {
+        clearAllData()
     }
 }

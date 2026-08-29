@@ -1,6 +1,5 @@
 package com.example.padibot.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,12 +10,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.padibot.model.Field
 import com.example.padibot.model.Mission
 import com.example.padibot.model.MissionEvent
 import com.example.padibot.theme.*
@@ -31,29 +28,20 @@ fun MissionDetailScreen(
     missionId: String,
     viewModel: PadiBotViewModel,
     onNavigateBack: () -> Unit,
-    onRerunMission: (Mission) -> Unit
+    onRerunMission: () -> Unit = {}
 ) {
     val allMissions by viewModel.allMissions.collectAsState()
     val allFields by viewModel.allFields.collectAsState()
     val mission = allMissions.find { it.id == missionId }
     val field = allFields.find { it.id == mission?.fieldId }
-
-    val eventsState = produceState<List<MissionEvent>>(initialValue = emptyList(), key1 = missionId) {
-        viewModel.repository.getEvents(missionId).collect {
-            value = it
-        }
-    }
+    val events by viewModel.getEventsForMission(missionId).collectAsState(initial = emptyList())
+    val dateFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
     if (mission == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Misi tidak ditemukan")
+            Text("Misi tidak ditemukan.")
         }
         return
-    }
-
-    val dateFormatted = remember(mission.createdAt) {
-        val sdf = SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale("id", "ID"))
-        sdf.format(Date(mission.createdAt))
     }
 
     LazyColumn(
@@ -63,39 +51,55 @@ fun MissionDetailScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // Mission Overview Card
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().testTag("mission_detail_header_card")
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = mission.name,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "📅 $dateFormatted",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Column {
+                            Text(mission.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Green900)
+                            Text("Petak: ${mission.fieldName}", style = MaterialTheme.typography.bodySmall, color = Gray600)
                         }
                         MissionStatusBadge(status = mission.status)
+                    }
+
+                    Divider(color = Gray200)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Lebar Mesin", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                            Text("${String.format("%.0f cm", mission.machineWidthM * 100)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Column {
+                            Text("Jalur Tanam", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                            Text("${mission.totalLanes} Baris", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Column {
+                            Text("Jarak Tempuh", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                            Text(String.format("%.0f m", mission.estimatedDistanceM), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Column {
+                            Text("Durasi", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                            Text(mission.formatDuration(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
 
-        // Map Trajectory Canvas
+        // Live/Past Map Canvas
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -104,11 +108,7 @@ fun MissionDetailScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Visualisasi Lintasan Tanam (${field?.name ?: mission.fieldName})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("Jalur Misi Terlaksana", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     LiveMissionCanvas(
@@ -121,153 +121,62 @@ fun MissionDetailScreen(
             }
         }
 
-        // Comprehensive Audit Telemetry (Sesuai preview.webp Screen 6)
+        // Mission Audit Events Log
         item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Statistik & Metrik Penanaman",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+            Text("Log Peristiwa & Audit Misi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
 
-                    val areaM2 = field?.areaM2 ?: 2000.0
-                    val coveragePct = (mission.actualCoveragePct.takeIf { it > 0 } ?: mission.estimatedCoveragePct) / 100.0
-                    val areaPlanted = areaM2 * coveragePct
-                    val areaMissed = (areaM2 - areaPlanted).coerceAtLeast(0.0)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        DetailStatBox("Luas Total", String.format("%.0f m²", areaM2))
-                        DetailStatBox("Selesai Ditanam", String.format("%.0f m²", areaPlanted))
-                        DetailStatBox("Area Terlewat", String.format("%.0f m²", areaMissed))
-                    }
-
-                    HorizontalDivider(color = Gray200)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        DetailStatBox("Durasi", mission.formatDuration())
-                        DetailStatBox("Cakupan", String.format("%.1f%%", coveragePct * 100))
-                        DetailStatBox("Total Jalur", "${mission.totalLanes} Baris")
+        if (events.isEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(modifier = Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+                        Text("Belum ada log peristiwa untuk misi ini.", style = MaterialTheme.typography.bodySmall, color = Gray600)
                     }
                 }
             }
-        }
-
-        // Timeline Log Events
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Log Peristiwa & Riwayat Operasi",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    if (eventsState.value.isEmpty()) {
-                        Text(
-                            text = "Belum ada log peristiwa tercatat.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray600
-                        )
-                    } else {
-                        eventsState.value.forEach { event ->
-                            val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(event.timestamp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
+        } else {
+            items(events) { event ->
+                Card(
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (event.severity == "ERROR") ErrorRed else Green700
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(
-                                            when (event.severity) {
-                                                "CRITICAL" -> ErrorRed.copy(alpha = 0.15f)
-                                                "WARNING" -> WarningOrange.copy(alpha = 0.15f)
-                                                else -> Green100
-                                            }
-                                        )
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = event.eventType,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = when (event.severity) {
-                                            "CRITICAL" -> ErrorRed
-                                            "WARNING" -> WarningOrange
-                                            else -> Green800
-                                        }
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = event.message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = timeStr,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Gray600
+                                    text = event.eventType,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
+                            Text(text = event.message, style = MaterialTheme.typography.bodyMedium)
                         }
+
+                        Text(
+                            text = dateFormat.format(Date(event.timestamp)),
+                            style = CoordinateFont,
+                            fontSize = 11.sp,
+                            color = Gray600
+                        )
                     }
                 }
             }
         }
-
-        // Re-run Button
-        item {
-            Button(
-                onClick = {
-                    if (field != null) {
-                        viewModel.selectField(field)
-                    }
-                    viewModel.startMissionExecution(mission)
-                    onRerunMission(mission)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("button_rerun_mission"),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Green700)
-            ) {
-                Icon(imageVector = Icons.Default.Replay, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Jalankan Ulang Misi Ini", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun DetailStatBox(label: String, value: String) {
-    Column {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Gray600)
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Green900
-        )
     }
 }

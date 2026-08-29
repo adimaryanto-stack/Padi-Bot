@@ -1,7 +1,5 @@
 package com.example.padibot.ui.screens
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,19 +23,15 @@ import com.example.padibot.viewmodel.PadiBotViewModel
 fun SettingsScreen(
     viewModel: PadiBotViewModel
 ) {
-    val currentSettings by viewModel.machineSettings.collectAsState()
-    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+    val settings by viewModel.machineSettings.collectAsState()
+    val isConnected by viewModel.isConnected.collectAsState()
+    var wifiIp by remember(settings) { mutableStateOf(settings.wifiIp) }
+    var wifiPort by remember(settings) { mutableStateOf(settings.wifiPort.toString()) }
+    var btName by remember(settings) { mutableStateOf(settings.bluetoothDeviceName) }
+    var mqttBroker by remember(settings) { mutableStateOf(settings.mqttBroker) }
+    var mqttId by remember(settings) { mutableStateOf(settings.mqttDeviceId) }
 
-    var connectionType by remember(currentSettings) { mutableStateOf(currentSettings.connectionType) }
-    var wifiIp by remember(currentSettings) { mutableStateOf(currentSettings.wifiIp) }
-    var wifiPort by remember(currentSettings) { mutableStateOf(currentSettings.wifiPort.toString()) }
-    var btName by remember(currentSettings) { mutableStateOf(currentSettings.bluetoothDeviceName) }
-    var btMac by remember(currentSettings) { mutableStateOf(currentSettings.bluetoothDeviceMac) }
-    var mqttBroker by remember(currentSettings) { mutableStateOf(currentSettings.mqttBroker) }
-    var mqttDevice by remember(currentSettings) { mutableStateOf(currentSettings.mqttDeviceId) }
-
-    var saveFeedback by remember { mutableStateOf(false) }
-    var showResetDialog by remember { mutableStateOf(false) }
+    var showClearDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -47,522 +40,239 @@ fun SettingsScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Connection Mode Selector
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().testTag("settings_connection_card")
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Antarmuka Komunikasi Mesin",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    ConnectionType.entries.forEach { type ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = connectionType == type,
-                                onClick = { connectionType = type }
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Column {
-                                Text(
-                                    text = type.label,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (connectionType == type) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(color = Gray200)
-
-                    // Specific Config per Connection Type
-                    when (connectionType) {
-                        ConnectionType.SIMULATOR -> {
-                            Text(
-                                text = "✓ Mode Simulator Aktif. Pengujian otonom virtual tanpa membutuhkan modul fisik.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Green700
-                            )
-                        }
-                        ConnectionType.WIFI -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(
-                                    value = wifiIp,
-                                    onValueChange = { wifiIp = it },
-                                    label = { Text("IP Address Modul ESP") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                                OutlinedTextField(
-                                    value = wifiPort,
-                                    onValueChange = { wifiPort = it },
-                                    label = { Text("Port Komunikasi") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                            }
-                        }
-                        ConnectionType.BLUETOOTH -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(
-                                    value = btName,
-                                    onValueChange = { btName = it },
-                                    label = { Text("Nama Perangkat Bluetooth") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                                OutlinedTextField(
-                                    value = btMac,
-                                    onValueChange = { btMac = it },
-                                    label = { Text("MAC Address (e.g. 00:11:22:33:44:55)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                            }
-                        }
-                        ConnectionType.GSM_MQTT -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(
-                                    value = mqttBroker,
-                                    onValueChange = { mqttBroker = it },
-                                    label = { Text("MQTT Broker Host") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                                OutlinedTextField(
-                                    value = mqttDevice,
-                                    onValueChange = { mqttDevice = it },
-                                    label = { Text("Device ID Topik") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                            }
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            val newSet = currentSettings.copy(
-                                connectionType = connectionType,
-                                wifiIp = wifiIp,
-                                wifiPort = wifiPort.toIntOrNull() ?: 80,
-                                bluetoothDeviceName = btName,
-                                bluetoothDeviceMac = btMac,
-                                mqttBroker = mqttBroker,
-                                mqttDeviceId = mqttDevice
-                            )
-                            viewModel.updateMachineSettings(newSet)
-                            saveFeedback = true
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Green700),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Simpan Konfigurasi Komunikasi", fontWeight = FontWeight.Bold)
-                    }
-
-                    if (saveFeedback) {
-                        Text(
-                            text = "✓ Pengaturan berhasil disimpan",
-                            color = Green700,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-
-        // 2. Application Theme Settings Card (Versi Light Default)
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Tema Tampilan Aplikasi",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Pilih skema warna antarmuka untuk kenyamanan penggunaan di bawah terik matahari lapangan:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gray600
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (!isDarkTheme) Green100 else MaterialTheme.colorScheme.surfaceVariant,
-                            border = if (!isDarkTheme) BorderStroke(2.dp, Green700) else null,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { viewModel.setDarkTheme(false) }
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text("🌞", fontSize = 24.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Versi Light (Terang)",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = if (!isDarkTheme) Green900 else Gray800
-                                )
-                                Text("Aktif (Default)", fontSize = 10.sp, color = Green700, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isDarkTheme) Green100 else MaterialTheme.colorScheme.surfaceVariant,
-                            border = if (isDarkTheme) BorderStroke(2.dp, Green700) else null,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { viewModel.setDarkTheme(true) }
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text("🌙", fontSize = 24.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Versi Dark (Gelap)",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = if (isDarkTheme) Green900 else Gray800
-                                )
-                                Text("Mode Malam", fontSize = 10.sp, color = Gray600)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Simulator Fault Injection Testing
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Pengujian Keandalan (Fault Injection)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Uji respons sistem keselamatan saat terjadi anomali di lapangan:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gray600
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.injectSimulatorError("GPS_LOSS") },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Hilang GPS", fontSize = 12.sp)
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.injectSimulatorError("LOW_BATTERY") },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Baterai Drop", fontSize = 12.sp)
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.injectSimulatorError("CONNECTION_DROP") },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Putus Sinyal", fontSize = 12.sp)
-                        }
-                        Button(
-                            onClick = { viewModel.injectSimulatorError("RESTORE") },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Green700)
-                        ) {
-                            Text("Pulihkan Normal", fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Database Management & Reset
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Manajemen Data Lokal (Room Database)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Database offline tersimpan secara persisten pada perangkat.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gray600
-                    )
-
-                    OutlinedButton(
-                        onClick = { showResetDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)
-                    ) {
-                        Icon(imageVector = Icons.Default.Restore, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Reset & Muat Ulang Data Sampel")
-                    }
-                }
-            }
-        }
-
-        // 5. Firebase Realtime Database Integration Card
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("🔥", fontSize = 18.sp)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Firebase Realtime Database",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Green100
-                        ) {
-                            Text(
-                                text = "● Siap / Live",
-                                color = Green800,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "Telemetri robot, peta poligon batas sawah, dan riwayat penanaman disinkronkan secara real-time ke Firebase RTDB cloud.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gray600
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text("Database Endpoint:", fontSize = 10.sp, color = Gray600, fontWeight = FontWeight.Bold)
-                            Text(
-                                text = com.example.padibot.service.FirebaseRealtimeService.DATABASE_URL,
-                                fontSize = 10.sp,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                color = Green800
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Auto-Stream Telemetri Real-time",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Kirim koordinat GPS, baterai & status robot tiap 1.5 detik",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Gray600,
-                                fontSize = 11.sp
-                            )
-                        }
-                        Switch(
-                            checked = true,
-                            onCheckedChange = { },
-                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Green700)
-                        )
-                    }
-
-                    Button(
-                        onClick = {
-                            viewModel.selectedField.value?.let { viewModel.firebaseService.syncField(it) }
-                            viewModel.firebaseService.pushTelemetry(viewModel.telemetry.value)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Green700),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("🌐 Sinkronkan Semua Data Sekarang", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-
-        // 6. Google Maps SDK GIS Integration Card
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("🗺️", fontSize = 18.sp)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Integrasi Google Maps SDK",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Green100
-                        ) {
-                            Text(
-                                text = "GIS V2 Ready",
-                                color = Green800,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "Aplikasi mendukung citra satelit Google Maps HD dan Kanvas Skematik offline vektor poligon lahan.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gray600
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Package Name: com.aistudio.padibot.ricerbt", fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                            Text("SHA-1 Fingerprint: C5:DB:DD:2A:72:C1:98:90:E2:BB:8D:18:2C:18:11:33", fontSize = 9.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = Gray700)
-                        }
-                    }
-                }
-            }
-        }
-
-        // 5. About App
+        // Header
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(
+                Row(
                     modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    Icon(imageVector = Icons.Default.Settings, contentDescription = null, tint = Green700, modifier = Modifier.size(32.dp))
+                    Column {
+                        Text("Pengaturan Konektivitas & Alat", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("ESP32 • RTK GPS • Simulator • IoT Cloud", style = MaterialTheme.typography.bodySmall, color = Gray600)
+                    }
+                }
+            }
+        }
+
+        // Connection Mode Selection
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "PadiBot Mobile GCS",
+                        text = "Protokol Komunikasi Mesin",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = "Versi 1.1.0 • Build 2026",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gray600
+
+                    ConnectionType.values().forEach { connType ->
+                        val isSelected = settings.connectionType == connType
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Green50 else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Green700) else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.updateMachineSettings(settings.copy(connectionType = connType))
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        viewModel.updateMachineSettings(settings.copy(connectionType = connType))
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = Green700)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = connType.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) Green900 else Gray900
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Specific IP/Port/BT Settings
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Parameter Jaringan Hardware", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+                    OutlinedTextField(
+                        value = wifiIp,
+                        onValueChange = { wifiIp = it },
+                        label = { Text("IP Address ESP32 WiFi") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Sistem Kontrol Mesin Tanam Padi Otonom Berbasis Android, RTK GNSS & Arduino",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gray700
+
+                    OutlinedTextField(
+                        value = wifiPort,
+                        onValueChange = { wifiPort = it },
+                        label = { Text("Port Server (HTTP / WebSocket)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
                     )
+
+                    OutlinedTextField(
+                        value = btName,
+                        onValueChange = { btName = it },
+                        label = { Text("Nama Perangkat Bluetooth") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+
+                    Button(
+                        onClick = {
+                            viewModel.updateMachineSettings(
+                                settings.copy(
+                                    wifiIp = wifiIp,
+                                    wifiPort = wifiPort.toIntOrNull() ?: 80,
+                                    bluetoothDeviceName = btName,
+                                    mqttBroker = mqttBroker,
+                                    mqttDeviceId = mqttId
+                                )
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Green700),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Simpan Konfigurasi Jaringan", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Safety Simulator Testing / Fault Injection
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Uji Simulasi Keamanan (Fault Injection)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Simulasikan skenario kegagalan sensor untuk menguji respon keselamatan otomatis:", style = MaterialTheme.typography.bodySmall, color = Gray700)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = { viewModel.injectError("GPS_LOSS") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Hilang GPS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        FilledTonalButton(
+                            onClick = { viewModel.injectError("LOW_BATTERY") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Baterai Low", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        FilledTonalButton(
+                            onClick = { viewModel.injectError("RESTORE") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = Green100, contentColor = Green800)
+                        ) {
+                            Text("Normal", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Database Management / Reset
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Penyimpanan & Database Lokal", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Database Room SQLite menyimpan semua poligon sawah, trajektori tanam, dan catatan audit misi.", style = MaterialTheme.typography.bodySmall, color = Gray600)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.resetSampleData() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Muat Data Contoh")
+                        }
+
+                        Button(
+                            onClick = { showClearDialog = true },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
+                        ) {
+                            Text("Hapus Semua Data")
+                        }
+                    }
                 }
             }
         }
     }
 
-    if (showResetDialog) {
+    if (showClearDialog) {
         AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text("Konfirmasi Reset Database", fontWeight = FontWeight.Bold) },
-            text = {
-                Text("Semua data petak sawah dan riwayat misi yang telah disimpan akan dikembalikan ke data sampel awal.")
-            },
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("Hapus Semua Data?", fontWeight = FontWeight.Bold) },
+            text = { Text("Semua peta sawah dan riwayat misi akan dihapus permanen dari perangkat.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.clearAllUserData()
-                        showResetDialog = false
+                        viewModel.clearAllData()
+                        showClearDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
                 ) {
-                    Text("Reset Sekarang")
+                    Text("Hapus Semua")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showResetDialog = false }) {
+                OutlinedButton(onClick = { showClearDialog = false }) {
                     Text("Batal")
                 }
             }

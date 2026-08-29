@@ -1,33 +1,23 @@
 package com.example.padibot.model
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 enum class RoutePattern(
     val title: String,
-    val description: String,
-    val emoji: String
+    val description: String
 ) {
     BOUSTROPHEDON(
-        title = "1. Persegi Panjang / Zig-Zag",
-        description = "Pola bolak-balik paralel standar paling efisien untuk petakan kotak",
-        emoji = "⚡"
+        title = "Boustrophedon (Zig-Zag Paralel)",
+        description = "Pola bolak-balik standar pertanian presisi untuk petak teratur"
     ),
     HEADLAND_INNER(
-        title = "2. Dengan Headland (Area Putar Keliling)",
-        description = "Tanam area tengah terlebih dahulu, sisakan putaran di keliling pematang",
-        emoji = "🔄"
+        title = "Headland & Jalur Tengah",
+        description = "Mulai dari tengah petak, diakhiri dengan putaran headland terluar"
     ),
     SPIRAL_INWARD(
-        title = "3. Oval / Spiral (Pinggir ke Tengah)",
-        description = "Memutar mengelilingi batas sawah dari luar menuju titik tengah",
-        emoji = "🌀"
+        title = "Spiral Konsentris Inward",
+        description = "Menanam dari batas terluar melingkar masuk ke pusat sawah"
     ),
     SPIRAL_OUTWARD(
-        title = "4. Oval / Spiral (Tengah ke Pinggir)",
-        description = "Mulai dari pusat tengah sawah memutar membesar ke arah luar",
-        emoji = "💫"
-    );
-
-    fun formatLabel(): String = "$emoji $title"
+        title = "Spiral Konsentris Outward",
+        description = "Menanam dari pusat tengah sawah melingkar menuju batas luar"
+    )
 }

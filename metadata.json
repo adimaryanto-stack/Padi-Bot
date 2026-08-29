@@ -1,6 +1,8 @@
 {
   "name": "PadiBot",
-  "description": "Smart Rice Planter & Autonomous Precision Rice Planting System",
+  "description": "Smart Autonomous Rice Planting Machine Control System & GIS Planning",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

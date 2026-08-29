@@ -1,6 +1,8 @@
 package com.example.padibot.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -13,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,201 +29,251 @@ import com.example.padibot.viewmodel.PadiBotViewModel
 @Composable
 fun ManualControlScreen(
     viewModel: PadiBotViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit = {}
 ) {
     val telemetry by viewModel.telemetry.collectAsState()
-    var speedMode by remember { mutableStateOf(1) } // 0: Slow, 1: Normal, 2: Fast
-    val speedFactor = when (speedMode) {
-        0 -> 0.4f
-        1 -> 0.75f
-        else -> 1.0f
-    }
+    var speedMultiplier by remember { mutableStateOf(0.5f) }
+    var activeDirection by remember { mutableStateOf(ManualDirection.STOP) }
+    var isPlantingManual by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Status Strip
+        // Status overview
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Mode Manual RC / Override",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Green900
+                        )
+                        GpsStatusBadge(gpsStatus = telemetry.gpsStatus, accuracyM = telemetry.positionAccuracyM)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Baterai: ${telemetry.batteryPct.toInt()}%", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("Kecepatan: ${String.format("%.2f", telemetry.speedMps)} m/s", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("Arah: ${telemetry.headingDeg.toInt()}°", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Virtual D-Pad Controller Card
+        item {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Kontrol Kemudi Traksi (D-Pad)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Gray800
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // D-Pad Grid
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // FORWARD
+                        DPadButton(
+                            icon = Icons.Default.KeyboardArrowUp,
+                            label = "MAJU",
+                            isSelected = activeDirection == ManualDirection.FORWARD,
+                            onPress = {
+                                activeDirection = ManualDirection.FORWARD
+                                viewModel.sendManualCommand(ManualDirection.FORWARD, speedMultiplier)
+                            },
+                            onRelease = {
+                                activeDirection = ManualDirection.STOP
+                                viewModel.sendManualCommand(ManualDirection.STOP, 0f)
+                            },
+                            modifier = Modifier.testTag("dpad_up")
+                        )
+
+                        // MIDDLE ROW (LEFT, STOP, RIGHT)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            DPadButton(
+                                icon = Icons.Default.KeyboardArrowLeft,
+                                label = "KIRI",
+                                isSelected = activeDirection == ManualDirection.LEFT,
+                                onPress = {
+                                    activeDirection = ManualDirection.LEFT
+                                    viewModel.sendManualCommand(ManualDirection.LEFT, speedMultiplier)
+                                },
+                                onRelease = {
+                                    activeDirection = ManualDirection.STOP
+                                    viewModel.sendManualCommand(ManualDirection.STOP, 0f)
+                                },
+                                modifier = Modifier.testTag("dpad_left")
+                            )
+
+                            // Center STOP
+                            Surface(
+                                shape = CircleShape,
+                                color = ErrorRed,
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clickable {
+                                        activeDirection = ManualDirection.STOP
+                                        viewModel.sendManualCommand(ManualDirection.STOP, 0f)
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("STOP", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+
+                            DPadButton(
+                                icon = Icons.Default.KeyboardArrowRight,
+                                label = "KANAN",
+                                isSelected = activeDirection == ManualDirection.RIGHT,
+                                onPress = {
+                                    activeDirection = ManualDirection.RIGHT
+                                    viewModel.sendManualCommand(ManualDirection.RIGHT, speedMultiplier)
+                                },
+                                onRelease = {
+                                    activeDirection = ManualDirection.STOP
+                                    viewModel.sendManualCommand(ManualDirection.STOP, 0f)
+                                },
+                                modifier = Modifier.testTag("dpad_right")
+                            )
+                        }
+
+                        // BACKWARD
+                        DPadButton(
+                            icon = Icons.Default.KeyboardArrowDown,
+                            label = "MUNDUR",
+                            isSelected = activeDirection == ManualDirection.BACKWARD,
+                            onPress = {
+                                activeDirection = ManualDirection.BACKWARD
+                                viewModel.sendManualCommand(ManualDirection.BACKWARD, speedMultiplier)
+                            },
+                            onRelease = {
+                                activeDirection = ManualDirection.STOP
+                                viewModel.sendManualCommand(ManualDirection.STOP, 0f)
+                            },
+                            modifier = Modifier.testTag("dpad_down")
+                        )
+                    }
+                }
+            }
+        }
+
+        // Speed Throttle Slider Card
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().testTag("manual_control_status_card")
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Batas Kecepatan Motor", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Text(
-                            text = "Posisi: ${String.format("%.6f, %.6f", telemetry.positionLat, telemetry.positionLon)}",
-                            style = CoordinateFont
-                        )
-                        Text(
-                            text = "Arah: ${telemetry.headingDeg.toInt()}° • Kecepatan: ${String.format("%.2f m/s", telemetry.speedMps)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray600
+                            text = "${(speedMultiplier * 100).toInt()}% (${String.format("%.2f", speedMultiplier * 1.2)} m/s)",
+                            fontWeight = FontWeight.Bold,
+                            color = Green700
                         )
                     }
 
-                    GpsStatusBadge(
-                        gpsStatus = telemetry.gpsStatus,
-                        accuracyM = telemetry.positionAccuracyM
+                    Slider(
+                        value = speedMultiplier,
+                        onValueChange = { speedMultiplier = it },
+                        valueRange = 0.1f..1.0f,
+                        steps = 8,
+                        colors = SliderDefaults.colors(thumbColor = Green700, activeTrackColor = Green600)
                     )
                 }
             }
         }
 
-        // Speed Selector Chips
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Kecepatan Manual: ",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                FilterChip(
-                    selected = speedMode == 0,
-                    onClick = { speedMode = 0 },
-                    label = { Text("Lambat") }
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                FilterChip(
-                    selected = speedMode == 1,
-                    onClick = { speedMode = 1 },
-                    label = { Text("Normal") }
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                FilterChip(
-                    selected = speedMode == 2,
-                    onClick = { speedMode = 2 },
-                    label = { Text("Cepat") }
-                )
-            }
-        }
-
-        // Interactive D-Pad Controller
-        item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                modifier = Modifier.padding(vertical = 8.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Up Button
-                    IconButton(
-                        onClick = { viewModel.sendManualCommand(ManualDirection.FORWARD, speedFactor) },
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(Green700)
-                            .testTag("dpad_button_forward")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Maju",
-                            tint = Color.White,
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
-
-                    // Middle Row: Left, Stop, Right
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = { viewModel.sendManualCommand(ManualDirection.LEFT, speedFactor) },
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(Green700)
-                                .testTag("dpad_button_left")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowLeft,
-                                contentDescription = "Belok Kiri",
-                                tint = Color.White,
-                                modifier = Modifier.size(40.dp)
-                            )
-                        }
-
-                        // STOP Center Button
-                        IconButton(
-                            onClick = { viewModel.sendManualCommand(ManualDirection.STOP, speedFactor) },
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(ErrorRed)
-                                .testTag("dpad_button_stop")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Stop,
-                                contentDescription = "Berhenti",
-                                tint = Color.White,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { viewModel.sendManualCommand(ManualDirection.RIGHT, speedFactor) },
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(Green700)
-                                .testTag("dpad_button_right")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowRight,
-                                contentDescription = "Belok Kanan",
-                                tint = Color.White,
-                                modifier = Modifier.size(40.dp)
-                            )
-                        }
-                    }
-
-                    // Down Button
-                    IconButton(
-                        onClick = { viewModel.sendManualCommand(ManualDirection.BACKWARD, speedFactor) },
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(Green700)
-                            .testTag("dpad_button_backward")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Mundur",
-                            tint = Color.White,
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Safety E-Stop
+        // Emergency Stop Button
         item {
             EmergencyStopButton(
-                onEmergencyStop = { viewModel.triggerEmergencyStop() }
+                onEmergencyStop = {
+                    viewModel.emergencyStop("Tombol Darurat Ditekan Saat Manual Control")
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun DPadButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    isSelected: Boolean,
+    onPress: () -> Unit,
+    onRelease: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) Green700 else Green100,
+        modifier = modifier
+            .size(68.dp)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        onPress()
+                        tryAwaitRelease()
+                        onRelease()
+                    }
+                )
+            }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (isSelected) Color.White else Green900,
+                modifier = Modifier.size(32.dp)
+            )
+            Text(
+                text = label,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) Color.White else Green900
             )
         }
     }

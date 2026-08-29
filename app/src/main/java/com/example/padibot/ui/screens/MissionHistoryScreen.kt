@@ -11,14 +11,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.padibot.model.Mission
 import com.example.padibot.model.MissionStatus
-import com.example.padibot.theme.ErrorRed
-import com.example.padibot.theme.Green700
+import com.example.padibot.theme.*
 import com.example.padibot.ui.components.MissionStatusBadge
 import com.example.padibot.viewmodel.PadiBotViewModel
 import java.text.SimpleDateFormat
@@ -27,203 +27,158 @@ import java.util.*
 @Composable
 fun MissionHistoryScreen(
     viewModel: PadiBotViewModel,
-    onNavigateToDetail: (String) -> Unit
+    onNavigateToMissionDetail: (String) -> Unit = {},
+    onNavigateToDetail: (String) -> Unit = onNavigateToMissionDetail
 ) {
-    val missions by viewModel.allMissions.collectAsState()
-    var selectedFilter by remember { mutableStateOf(0) } // 0: Semua, 1: Selesai, 2: Lainnya
-    var missionToDelete by remember { mutableStateOf<Mission?>(null) }
+    val allMissions by viewModel.allMissions.collectAsState()
+    var selectedFilter by remember { mutableStateOf("ALL") }
+    val dateFormat = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()) }
 
-    val filteredMissions = missions.filter {
+    val filteredMissions = remember(allMissions, selectedFilter) {
         when (selectedFilter) {
-            1 -> it.status == MissionStatus.COMPLETED
-            2 -> it.status != MissionStatus.COMPLETED
-            else -> true
+            "COMPLETED" -> allMissions.filter { it.status == MissionStatus.COMPLETED }
+            "RUNNING" -> allMissions.filter { it.status == MissionStatus.RUNNING || it.status == MissionStatus.PAUSED }
+            "STOPPED" -> allMissions.filter { it.status == MissionStatus.STOPPED || it.status == MissionStatus.ERROR }
+            else -> allMissions
         }
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Filter Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = selectedFilter == 0,
-                onClick = { selectedFilter = 0 },
-                label = { Text("Semua (${missions.size})") }
-            )
-            FilterChip(
-                selected = selectedFilter == 1,
-                onClick = { selectedFilter = 1 },
-                label = { Text("Selesai") }
-            )
-            FilterChip(
-                selected = selectedFilter == 2,
-                onClick = { selectedFilter = 2 },
-                label = { Text("Draft / Lainnya") }
-            )
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.History, contentDescription = null, tint = Green700, modifier = Modifier.size(32.dp))
+                    Column {
+                        Text("Riwayat & Log Misi Tanam", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("${allMissions.size} Total Catatan Aktivitas Autonomous", style = MaterialTheme.typography.bodySmall, color = Gray600)
+                    }
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        // Filter Chips
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = selectedFilter == "ALL",
+                    onClick = { selectedFilter = "ALL" },
+                    label = { Text("Semua (${allMissions.size})") }
+                )
+                FilterChip(
+                    selected = selectedFilter == "COMPLETED",
+                    onClick = { selectedFilter = "COMPLETED" },
+                    label = { Text("Selesai") }
+                )
+                FilterChip(
+                    selected = selectedFilter == "RUNNING",
+                    onClick = { selectedFilter = "RUNNING" },
+                    label = { Text("Aktif/Jeda") }
+                )
+                FilterChip(
+                    selected = selectedFilter == "STOPPED",
+                    onClick = { selectedFilter = "STOPPED" },
+                    label = { Text("Berhenti") }
+                )
+            }
+        }
 
         if (filteredMissions.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 40.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Assessment,
-                        contentDescription = null,
-                        tint = Green700,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Text(
-                        text = "Belum Ada Riwayat Misi",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Misi yang dijalankan akan tercatat otomatis di sini.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("📋", fontSize = 48.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Tidak Ada Catatan Misi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Belum ada riwayat penanaman yang cocok dengan filter.", style = MaterialTheme.typography.bodySmall, color = Gray600)
+                    }
                 }
             }
         } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
-                items(filteredMissions, key = { it.id }) { mission ->
-                    MissionCardItem(
-                        mission = mission,
-                        onClick = { onNavigateToDetail(mission.id) },
-                        onDelete = { missionToDelete = mission }
-                    )
-                }
-            }
-        }
-    }
-
-    if (missionToDelete != null) {
-        val m = missionToDelete!!
-        AlertDialog(
-            onDismissRequest = { missionToDelete = null },
-            title = { Text("Hapus Riwayat Misi?", fontWeight = FontWeight.Bold) },
-            text = { Text("Riwayat '${m.name}' akan dihapus secara permanen.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteMission(m.id)
-                        missionToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
+            items(filteredMissions) { mission ->
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (onNavigateToDetail != onNavigateToMissionDetail) {
+                                onNavigateToDetail(mission.id)
+                            } else {
+                                onNavigateToMissionDetail(mission.id)
+                            }
+                        }
+                        .testTag("mission_item_${mission.id}")
                 ) {
-                    Text("Hapus")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { missionToDelete = null }) {
-                    Text("Batal")
-                }
-            }
-        )
-    }
-}
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = mission.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Green900
+                                )
+                                Text(
+                                    text = "Petak: ${mission.fieldName}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Gray700
+                                )
+                            }
+                            MissionStatusBadge(status = mission.status)
+                        }
 
-@Composable
-private fun MissionCardItem(
-    mission: Mission,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val dateStr = remember(mission.createdAt) {
-        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale("id", "ID"))
-        sdf.format(Date(mission.createdAt))
-    }
+                        Divider(color = Gray200)
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .testTag("mission_item_${mission.id}")
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = mission.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "📅 $dateStr",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                MissionStatusBadge(status = mission.status)
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("Cakupan", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = String.format("%.1f%%", mission.actualCoveragePct.takeIf { it > 0 } ?: mission.estimatedCoveragePct),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Green700
-                    )
-                }
-
-                Column {
-                    Text("Jalur", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = "${mission.totalLanes} Jalur",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Column {
-                    Text("Jarak", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = mission.formatDistance(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Column {
-                    Text("Durasi", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = mission.formatDuration(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("Jalur Tanam", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                                Text("${mission.totalLanes} Baris", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Column {
+                                Text("Cakupan", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                                Text("${String.format("%.1f", if (mission.actualCoveragePct > 0) mission.actualCoveragePct else mission.estimatedCoveragePct)}%", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Green700)
+                            }
+                            Column {
+                                Text("Durasi", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                                Text(mission.formatDuration(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Column {
+                                Text("Waktu", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                                Text(dateFormat.format(Date(mission.createdAt)), style = MaterialTheme.typography.bodySmall, color = Gray700)
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -10,13 +10,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.padibot.theme.*
 import com.example.padibot.ui.components.LiveMissionCanvas
+import com.example.padibot.ui.components.StepIndicatorHeader
 import com.example.padibot.viewmodel.PadiBotViewModel
 
 @Composable
@@ -26,14 +27,14 @@ fun RoutePreviewScreen(
     onNavigateBack: () -> Unit
 ) {
     val selectedField by viewModel.selectedField.collectAsState()
-    val selectedPattern by viewModel.selectedPattern.collectAsState()
     val generatedRoute by viewModel.generatedRoute.collectAsState()
+    val selectedPattern by viewModel.selectedPattern.collectAsState()
     val machineWidth by viewModel.machineWidth.collectAsState()
     val headlandWidth by viewModel.headlandWidth.collectAsState()
     val laneOrientation by viewModel.laneOrientation.collectAsState()
 
-    var missionName by remember {
-        mutableStateOf("Misi ${selectedField?.name ?: "Sawah"} - Tanam Padi")
+    var missionName by remember(selectedField) {
+        mutableStateOf("Misi Tanam ${selectedField?.name ?: "Sawah"} #${System.currentTimeMillis() % 1000}")
     }
 
     LazyColumn(
@@ -48,13 +49,38 @@ fun RoutePreviewScreen(
             StepIndicatorHeader(currentStep = 2)
         }
 
+        // Field Info
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = selectedField?.name ?: "Sawah Tanpa Nama",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Green900
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Pola: ${selectedPattern.title} • Lebar: ${String.format("%.0f cm", machineWidth * 100)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray700
+                    )
+                }
+            }
+        }
+
         // Live Route Visualization Canvas
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().testTag("route_preview_canvas_card")
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
@@ -63,14 +89,19 @@ fun RoutePreviewScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Visualisasi: ${selectedPattern.title}",
+                            text = "Kanvas Jalur Trajektori",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                        AssistChip(
-                            onClick = {},
-                            label = { Text("${generatedRoute?.totalLanes ?: 0} Jalur") }
-                        )
+                        Surface(shape = RoundedCornerShape(6.dp), color = Green100) {
+                            Text(
+                                text = "${generatedRoute?.waypoints?.size ?: 0} Waypoint",
+                                color = Green800,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -78,77 +109,61 @@ fun RoutePreviewScreen(
                     LiveMissionCanvas(
                         boundary = selectedField?.boundary ?: emptyList(),
                         waypoints = generatedRoute?.waypoints ?: emptyList(),
-                        telemetry = null,
-                        modifier = Modifier.height(260.dp)
+                        modifier = Modifier.height(280.dp)
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Legend
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        LegendItem(color = Green800, label = "Batas Sawah")
-                        LegendItem(color = RouteLanePlanned, label = "Jalur Tanam")
-                        LegendItem(color = SuccessGreen, label = "Titik Awal (S)")
-                        LegendItem(color = ErrorRed, label = "Titik Akhir (E)")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(10.dp).background(Green700, RoundedCornerShape(3.dp)))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Batas Sawah", fontSize = 11.sp, color = Gray700)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(10.dp).background(Color(0xFF00E676), RoundedCornerShape(3.dp)))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Jalur Tanam Otonom", fontSize = 11.sp, color = Gray700)
+                        }
                     }
                 }
             }
         }
 
-        // Plan Metrics Card
+        // Metrics Summary Card
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = Green900),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Ringkasan Rencana Operasi",
+                        text = "Ringkasan Parameter & Estimasi Hasil",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        MetricBlock(
-                            label = "Luas Area",
-                            value = selectedField?.formatArea() ?: "0 m²"
-                        )
-                        MetricBlock(
-                            label = "Total Jalur",
-                            value = "${generatedRoute?.totalLanes ?: 0} Jalur"
-                        )
-                        MetricBlock(
-                            label = "Cakupan Efektif",
-                            value = String.format("%.1f%%", generatedRoute?.coveragePct ?: 95.0)
-                        )
-                    }
-
-                    HorizontalDivider(color = Gray200)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        MetricBlock(
-                            label = "Total Panjang Lintasan",
-                            value = String.format("%.0f meter", generatedRoute?.totalDistanceM ?: 0.0)
-                        )
-                        MetricBlock(
-                            label = "Estimasi Waktu Tanam",
-                            value = "±${((generatedRoute?.estimatedDurationSec ?: 0) / 60).coerceAtLeast(1)} Menit"
-                        )
-                        MetricBlock(
-                            label = "Orientasi Jalur",
-                            value = "${laneOrientation.toInt()}°"
-                        )
+                        Column {
+                            Text("Total Jalur Tanam", style = MaterialTheme.typography.labelSmall, color = Green300)
+                            Text("${generatedRoute?.totalLanes ?: 0} Baris", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                        Column {
+                            Text("Total Jarak Tempuh", style = MaterialTheme.typography.labelSmall, color = Green300)
+                            Text(String.format("%.0f meter", generatedRoute?.totalDistanceM ?: 0.0), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                        Column {
+                            Text("Estimasi Cakupan", style = MaterialTheme.typography.labelSmall, color = Green300)
+                            Text("${generatedRoute?.coveragePct ?: 0.0}%", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Green400)
+                        }
                     }
                 }
             }
@@ -159,77 +174,50 @@ fun RoutePreviewScreen(
             OutlinedTextField(
                 value = missionName,
                 onValueChange = { missionName = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("input_mission_name"),
-                label = { Text("Nama Misi") },
+                label = { Text("Nama Misi Tanam") },
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true
             )
         }
 
-        // Action Buttons Row
+        // Action Buttons
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Button(
+                onClick = {
+                    viewModel.approveMission(missionName) { approvedMission ->
+                        viewModel.startMissionExecution(approvedMission)
+                        onNavigateToExecution()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .testTag("button_approve_and_start"),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Green700)
             ) {
-                OutlinedButton(
-                    onClick = onNavigateBack,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(54.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text("Ubah Pengaturan", fontWeight = FontWeight.SemiBold)
-                }
-
-                Button(
-                    onClick = {
-                        viewModel.approveMission(missionName) { mission ->
-                            viewModel.startMissionExecution(mission)
-                            onNavigateToExecution()
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1.3f)
-                        .height(54.dp)
-                        .testTag("button_approve_and_start_mission"),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Green700)
-                ) {
-                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("✓ Approve & Mulai", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
+                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("🚀 Approve & Mulai Eksekusi Misi", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
+/**
+ * Composable alias for SimulatorScreenView
+ */
 @Composable
-private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(color)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Gray600)
-    }
+fun SimulatorScreenView(
+    viewModel: PadiBotViewModel,
+    onNavigateToExecution: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    RoutePreviewScreen(
+        viewModel = viewModel,
+        onNavigateToExecution = onNavigateToExecution,
+        onNavigateBack = onNavigateBack
+    )
 }
 
-@Composable
-private fun MetricBlock(label: String, value: String) {
-    Column {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Gray600)
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Gray900
-        )
-    }
-}

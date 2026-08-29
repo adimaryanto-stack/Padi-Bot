@@ -1,54 +1,39 @@
 package com.example.padibot.service
 
-import com.example.padibot.algorithm.PolygonMath
 import com.example.padibot.model.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlin.math.*
-
-enum class ManualDirection {
-    FORWARD,
-    BACKWARD,
-    LEFT,
-    RIGHT,
-    STOP
-}
+import kotlinx.coroutines.flow.*
 
 class MachineService(private val scope: CoroutineScope) {
-
-    private val _settings = MutableStateFlow(MachineSettings())
-    val settings: StateFlow<MachineSettings> = _settings.asStateFlow()
-
-    private val _isConnected = MutableStateFlow(true)
-    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
-
-    private val _telemetry = MutableStateFlow(
-        Telemetry(
-            timestamp = System.currentTimeMillis(),
-            positionLat = -6.923400,
-            positionLon = 107.610000,
-            positionAccuracyM = 1.2f,
-            batteryPct = 92.0f,
-            speedMps = 0.0f,
-            headingDeg = 0.0f,
-            gpsStatus = GpsStatus.GPS,
-            missionProgressPct = 0.0f,
-            currentLaneIndex = 0,
-            totalLanes = 0
-        )
-    )
-    val telemetry: StateFlow<Telemetry> = _telemetry.asStateFlow()
 
     private val _activeMission = MutableStateFlow<Mission?>(null)
     val activeMission: StateFlow<Mission?> = _activeMission.asStateFlow()
 
-    private val _missionStatus = MutableStateFlow(MissionStatus.DRAFT)
+    private val _missionStatus = MutableStateFlow(MissionStatus.READY)
     val missionStatus: StateFlow<MissionStatus> = _missionStatus.asStateFlow()
+
+    private val _telemetry = MutableStateFlow(
+        Telemetry(
+            latitude = -6.923450,
+            longitude = 107.610150,
+            headingDeg = 45f,
+            speedMps = 0f,
+            batteryPct = 98f,
+            missionProgressPct = 0f,
+            rtkFixed = true,
+            isPlantingActive = false,
+            gpsStatus = "RTK Fix",
+            positionAccuracyM = 0.02,
+            accuracyMeters = 0.02
+        )
+    )
+    val telemetry: StateFlow<Telemetry> = _telemetry.asStateFlow()
+
+    private val _isConnected = MutableStateFlow(true)
+    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    private val _settings = MutableStateFlow(MachineSettings())
+    val settings: StateFlow<MachineSettings> = _settings.asStateFlow()
 
     private val _emergencyStopTriggered = MutableSharedFlow<String>()
     val emergencyStopTriggered: SharedFlow<String> = _emergencyStopTriggered.asSharedFlow()
@@ -56,191 +41,140 @@ class MachineService(private val scope: CoroutineScope) {
     private var simulationJob: Job? = null
     private var currentWaypointIndex = 0
 
-    fun updateSettings(newSettings: MachineSettings) {
-        _settings.value = newSettings
-    }
-
-    fun setConnectionStatus(connected: Boolean) {
-        _isConnected.value = connected
-    }
-
     fun startMission(mission: Mission) {
         _activeMission.value = mission
         _missionStatus.value = MissionStatus.RUNNING
         currentWaypointIndex = 0
-
-        simulationJob?.cancel()
-        simulationJob = scope.launch {
-            runSimulationLoop(mission)
-        }
+        startSimulationLoop(mission)
     }
 
     fun pauseMission() {
-        if (_missionStatus.value == MissionStatus.RUNNING) {
-            _missionStatus.value = MissionStatus.PAUSED
-            simulationJob?.cancel()
-            _telemetry.value = _telemetry.value.copy(speedMps = 0.0f)
-        }
+        _missionStatus.value = MissionStatus.PAUSED
+        simulationJob?.cancel()
+        _telemetry.value = _telemetry.value.copy(speedMps = 0f, isPlantingActive = false)
     }
 
     fun resumeMission() {
         val mission = _activeMission.value ?: return
-        if (_missionStatus.value == MissionStatus.PAUSED) {
-            _missionStatus.value = MissionStatus.RUNNING
-            simulationJob?.cancel()
-            simulationJob = scope.launch {
-                runSimulationLoop(mission)
-            }
-        }
+        _missionStatus.value = MissionStatus.RUNNING
+        startSimulationLoop(mission)
     }
 
     fun stopMission() {
         _missionStatus.value = MissionStatus.STOPPED
         simulationJob?.cancel()
-        _telemetry.value = _telemetry.value.copy(speedMps = 0.0f)
+        _telemetry.value = _telemetry.value.copy(speedMps = 0f, isPlantingActive = false)
     }
 
-    fun emergencyStop(reason: String = "Tombol Berhenti Darurat Ditekan") {
+    fun emergencyStop(reason: String) {
         _missionStatus.value = MissionStatus.STOPPED
         simulationJob?.cancel()
         _telemetry.value = _telemetry.value.copy(
-            speedMps = 0.0f
+            speedMps = 0f,
+            isPlantingActive = false,
+            errorMsg = "E-STOP: $reason"
         )
         scope.launch {
             _emergencyStopTriggered.emit(reason)
         }
     }
 
-    fun handleManualCommand(direction: ManualDirection, speedFactor: Float = 0.5f) {
-        if (_missionStatus.value == MissionStatus.RUNNING) {
-            pauseMission()
-        }
-
+    fun handleManualCommand(direction: ManualDirection, speedFactor: Float) {
         val current = _telemetry.value
-        val speedMps = (_settings.value.maxSpeedMps * speedFactor).toFloat()
+        val speed = 0.8f * speedFactor
+        val delta = 0.000030 * speedFactor
 
-        when (direction) {
-            ManualDirection.FORWARD -> {
-                val rad = Math.toRadians(current.headingDeg.toDouble())
-                val dLat = (speedMps * cos(rad) * 0.000009)
-                val dLon = (speedMps * sin(rad) * 0.000009)
-                _telemetry.value = current.copy(
-                    positionLat = current.positionLat + dLat,
-                    positionLon = current.positionLon + dLon,
-                    speedMps = speedMps
-                )
-            }
-            ManualDirection.BACKWARD -> {
-                val rad = Math.toRadians(current.headingDeg.toDouble())
-                val dLat = (speedMps * cos(rad) * 0.000009)
-                val dLon = (speedMps * sin(rad) * 0.000009)
-                _telemetry.value = current.copy(
-                    positionLat = current.positionLat - dLat,
-                    positionLon = current.positionLon - dLon,
-                    speedMps = speedMps
-                )
-            }
-            ManualDirection.LEFT -> {
-                _telemetry.value = current.copy(
-                    headingDeg = (current.headingDeg - 15f + 360f) % 360f,
-                    speedMps = speedMps * 0.5f
-                )
-            }
-            ManualDirection.RIGHT -> {
-                _telemetry.value = current.copy(
-                    headingDeg = (current.headingDeg + 15f) % 360f,
-                    speedMps = speedMps * 0.5f
-                )
-            }
-            ManualDirection.STOP -> {
-                _telemetry.value = current.copy(speedMps = 0.0f)
-            }
+        val (newLat, newLon, newHeading) = when (direction) {
+            ManualDirection.FORWARD -> Triple(current.latitude + delta, current.longitude, 0f)
+            ManualDirection.BACKWARD -> Triple(current.latitude - delta, current.longitude, 180f)
+            ManualDirection.LEFT -> Triple(current.latitude, current.longitude - delta, 270f)
+            ManualDirection.RIGHT -> Triple(current.latitude, current.longitude + delta, 90f)
+            ManualDirection.STOP -> Triple(current.latitude, current.longitude, current.headingDeg)
         }
+
+        _telemetry.value = current.copy(
+            latitude = newLat,
+            longitude = newLon,
+            headingDeg = newHeading,
+            speedMps = if (direction == ManualDirection.STOP) 0f else speed,
+            isPlantingActive = direction != ManualDirection.STOP,
+            lastUpdate = System.currentTimeMillis()
+        )
+    }
+
+    fun updateSettings(newSettings: MachineSettings) {
+        _settings.value = newSettings
     }
 
     fun injectError(errorType: String) {
         when (errorType) {
             "GPS_LOSS" -> {
                 _telemetry.value = _telemetry.value.copy(
-                    gpsStatus = GpsStatus.NONE,
-                    positionAccuracyM = 15.0f
+                    rtkFixed = false,
+                    gpsStatus = "No GPS Fix",
+                    positionAccuracyM = 8.5,
+                    accuracyMeters = 8.5,
+                    errorMsg = "Koneksi RTK GPS Terputus!"
                 )
             }
             "LOW_BATTERY" -> {
                 _telemetry.value = _telemetry.value.copy(
-                    batteryPct = 12.0f
+                    batteryPct = 12f,
+                    errorMsg = "Baterai Kritis (<15%)!"
                 )
             }
             "CONNECTION_DROP" -> {
                 _isConnected.value = false
-                pauseMission()
             }
             "RESTORE" -> {
                 _isConnected.value = true
                 _telemetry.value = _telemetry.value.copy(
-                    gpsStatus = GpsStatus.GPS,
-                    positionAccuracyM = 1.2f,
-                    batteryPct = 88.0f
+                    rtkFixed = true,
+                    gpsStatus = "RTK Fix",
+                    positionAccuracyM = 0.02,
+                    accuracyMeters = 0.02,
+                    batteryPct = 95f,
+                    errorMsg = null
                 )
             }
         }
     }
 
-    private suspend fun runSimulationLoop(mission: Mission) {
-        val waypoints = mission.route
-        if (waypoints.isEmpty()) return
+    private fun startSimulationLoop(mission: Mission) {
+        simulationJob?.cancel()
+        simulationJob = scope.launch {
+            val waypoints = mission.route
+            if (waypoints.isEmpty()) return@launch
 
-        val totalPoints = waypoints.size
-        val totalDistance = mission.estimatedDistanceM
+            while (isActive && _missionStatus.value == MissionStatus.RUNNING) {
+                if (currentWaypointIndex >= waypoints.size) {
+                    _missionStatus.value = MissionStatus.COMPLETED
+                    _telemetry.value = _telemetry.value.copy(
+                        speedMps = 0f,
+                        isPlantingActive = false,
+                        missionProgressPct = 100f
+                    )
+                    break
+                }
 
-        while (currentWaypointIndex < totalPoints && _missionStatus.value == MissionStatus.RUNNING) {
-            val targetWp = waypoints[currentWaypointIndex]
-            val current = _telemetry.value
+                val target = waypoints[currentWaypointIndex]
+                val current = _telemetry.value
+                val progress = ((currentWaypointIndex + 1).toFloat() / waypoints.size.toFloat()) * 100f
+                val newBattery = (current.batteryPct - 0.05f).coerceAtLeast(5f)
 
-            // Compute heading towards target
-            val dLat = targetWp.lat - current.positionLat
-            val dLon = targetWp.lon - current.positionLon
-            val heading = (Math.toDegrees(atan2(dLon, dLat)).toFloat() + 360f) % 360f
-
-            // Smooth interpolation
-            val steps = 4
-            val latStep = (targetWp.lat - current.positionLat) / steps
-            val lonStep = (targetWp.lon - current.positionLon) / steps
-
-            for (s in 1..steps) {
-                if (_missionStatus.value != MissionStatus.RUNNING) break
-
-                val progress = (currentWaypointIndex.toFloat() + (s.toFloat() / steps)) / totalPoints
-                val progressPct = (progress * 100f).coerceIn(0f, 100f)
-                val remainingDist = totalDistance * (1.0 - progress)
-                val remainingMins = (remainingDist / (0.75 * 60)).toInt()
-
-                _telemetry.value = _telemetry.value.copy(
-                    timestamp = System.currentTimeMillis(),
-                    positionLat = current.positionLat + latStep * s,
-                    positionLon = current.positionLon + lonStep * s,
-                    speedMps = 0.75f,
-                    headingDeg = heading,
-                    batteryPct = (current.batteryPct - 0.03f).coerceAtLeast(5.0f),
-                    missionProgressPct = progressPct,
-                    currentLaneIndex = targetWp.laneIndex + 1,
-                    totalLanes = mission.totalLanes,
-                    plantedAreaM2 = (progress * (mission.totalLanes * mission.machineWidthM * 30.0)),
-                    remainingMinutes = remainingMins
+                _telemetry.value = current.copy(
+                    latitude = target.latitude,
+                    longitude = target.longitude,
+                    speedMps = 0.8f,
+                    batteryPct = newBattery,
+                    missionProgressPct = progress,
+                    isPlantingActive = true,
+                    lastUpdate = System.currentTimeMillis()
                 )
-                delay(250)
+
+                currentWaypointIndex++
+                delay(1200)
             }
-
-            currentWaypointIndex++
-        }
-
-        if (currentWaypointIndex >= totalPoints && _missionStatus.value == MissionStatus.RUNNING) {
-            _missionStatus.value = MissionStatus.COMPLETED
-            _telemetry.value = _telemetry.value.copy(
-                speedMps = 0.0f,
-                missionProgressPct = 100.0f,
-                currentLaneIndex = mission.totalLanes
-            )
         }
     }
 }

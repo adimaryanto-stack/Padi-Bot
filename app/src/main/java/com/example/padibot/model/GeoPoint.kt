@@ -1,13 +1,13 @@
 package com.example.padibot.model
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 data class GeoPoint(
-    val lat: Double,
-    val lon: Double
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
 ) {
+    val lat: Double get() = latitude
+    val lon: Double get() = longitude
+
     fun formatDisplay(): String {
-        return String.format("%.6f, %.6f", lat, lon)
+        return String.format("%.6f, %.6f", latitude, longitude)
     }
 }

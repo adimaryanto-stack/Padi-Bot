@@ -1,92 +1,54 @@
 package com.example.padibot.ui.components
 
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Agriculture
-import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Agriculture
-import androidx.compose.material.icons.outlined.Assessment
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
+import com.example.padibot.theme.Green700
 import com.example.padibot.ui.navigation.Screen
 
 @Composable
 fun PadiBotBottomBar(
     currentRoute: String?,
-    onNavigateTo: (String) -> Unit,
-    modifier: Modifier = Modifier
+    onNavigateTo: (String) -> Unit
 ) {
-    val items = listOf(
-        NavigationItem(
-            route = Screen.Dashboard.route,
-            title = "Beranda",
-            selectedIcon = Icons.Filled.Home,
-            unselectedIcon = Icons.Outlined.Home,
-            testTag = "nav_tab_home"
-        ),
-        NavigationItem(
-            route = Screen.FieldList.route,
-            title = "Sawah",
-            selectedIcon = Icons.Filled.Agriculture,
-            unselectedIcon = Icons.Outlined.Agriculture,
-            testTag = "nav_tab_fields"
-        ),
-        NavigationItem(
-            route = Screen.MissionHistory.route,
-            title = "Riwayat",
-            selectedIcon = Icons.Filled.Assessment,
-            unselectedIcon = Icons.Outlined.Assessment,
-            testTag = "nav_tab_history"
-        ),
-        NavigationItem(
-            route = Screen.Settings.route,
-            title = "Pengaturan",
-            selectedIcon = Icons.Filled.Settings,
-            unselectedIcon = Icons.Outlined.Settings,
-            testTag = "nav_tab_settings"
-        )
-    )
-
     NavigationBar(
-        modifier = modifier
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .testTag("padi_bottom_navigation"),
-        tonalElevation = 6.dp
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
-        items.forEach { item ->
-            val isSelected = currentRoute == item.route
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { onNavigateTo(item.route) },
-                icon = {
-                    Icon(
-                        imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                        contentDescription = item.title
-                    )
-                },
-                label = { Text(item.title) },
-                modifier = Modifier.testTag(item.testTag)
-            )
-        }
+        NavigationBarItem(
+            selected = currentRoute == Screen.Dashboard.route,
+            onClick = { onNavigateTo(Screen.Dashboard.route) },
+            icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
+            label = { Text("Utama") },
+            modifier = Modifier.testTag("nav_dashboard"),
+            colors = NavigationBarItemDefaults.colors(selectedIconColor = Green700, indicatorColor = MaterialTheme.colorScheme.primaryContainer)
+        )
+        NavigationBarItem(
+            selected = currentRoute == Screen.FieldList.route,
+            onClick = { onNavigateTo(Screen.FieldList.route) },
+            icon = { Icon(Icons.Default.Map, contentDescription = "Peta Sawah") },
+            label = { Text("Sawah") },
+            modifier = Modifier.testTag("nav_fields"),
+            colors = NavigationBarItemDefaults.colors(selectedIconColor = Green700, indicatorColor = MaterialTheme.colorScheme.primaryContainer)
+        )
+        NavigationBarItem(
+            selected = currentRoute == Screen.MissionHistory.route,
+            onClick = { onNavigateTo(Screen.MissionHistory.route) },
+            icon = { Icon(Icons.Default.History, contentDescription = "Riwayat") },
+            label = { Text("Riwayat") },
+            modifier = Modifier.testTag("nav_history"),
+            colors = NavigationBarItemDefaults.colors(selectedIconColor = Green700, indicatorColor = MaterialTheme.colorScheme.primaryContainer)
+        )
+        NavigationBarItem(
+            selected = currentRoute == Screen.Settings.route,
+            onClick = { onNavigateTo(Screen.Settings.route) },
+            icon = { Icon(Icons.Default.Settings, contentDescription = "Pengaturan") },
+            label = { Text("Alat") },
+            modifier = Modifier.testTag("nav_settings"),
+            colors = NavigationBarItemDefaults.colors(selectedIconColor = Green700, indicatorColor = MaterialTheme.colorScheme.primaryContainer)
+        )
     }
 }
-
-private data class NavigationItem(
-    val route: String,
-    val title: String,
-    val selectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    val unselectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    val testTag: String
-)

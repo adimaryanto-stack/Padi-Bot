@@ -1,238 +1,505 @@
 package com.example.padibot.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.padibot.algorithm.PolygonMath
 import com.example.padibot.model.GeoPoint
 import com.example.padibot.model.Telemetry
-import com.example.padibot.model.Waypoint
 import com.example.padibot.theme.*
-import kotlin.math.max
-import kotlin.math.min
+import kotlin.math.*
 
+/**
+ * Interactive SVG/Vector Map Canvas supporting pinch-to-zoom, pan, double-tap zoom,
+ * precision zoom buttons, center-on-rover tracking, and dynamic metric scale bar.
+ */
 @Composable
 fun LiveMissionCanvas(
     boundary: List<GeoPoint>,
-    waypoints: List<Waypoint>,
-    telemetry: Telemetry?,
+    waypoints: List<GeoPoint>,
+    telemetry: Telemetry? = null,
     modifier: Modifier = Modifier,
-    heightDp: Int = 300
+    enableZoomControls: Boolean = true,
+    showScaleBar: Boolean = true,
+    showDirectionArrows: Boolean = true
 ) {
+    // Zoom and pan transformation states
+    var scale by remember { mutableFloatStateOf(1.0f) }
+    var panOffset by remember { mutableStateOf(Offset.Zero) }
+
+    // Bounds calculation
+    val allPoints = remember(boundary, waypoints) {
+        (boundary + waypoints).ifEmpty {
+            listOf(GeoPoint(-6.923450, 107.610150), GeoPoint(-6.923750, 107.610550))
+        }
+    }
+
+    val minLat = remember(allPoints) { allPoints.minOf { it.latitude } }
+    val maxLat = remember(allPoints) { allPoints.maxOf { it.latitude } }
+    val minLon = remember(allPoints) { allPoints.minOf { it.longitude } }
+    val maxLon = remember(allPoints) { allPoints.maxOf { it.longitude } }
+
+    val latSpan = remember(minLat, maxLat) { (maxLat - minLat).coerceAtLeast(0.00008) }
+    val lonSpan = remember(minLon, maxLon) { (maxLon - minLon).coerceAtLeast(0.00008) }
+
+    // Helper to reset view to 100% fit
+    fun resetView() {
+        scale = 1.0f
+        panOffset = Offset.Zero
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(heightDp.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFFE8F5E9))
+            .clip(RoundedCornerShape(12.dp))
+            .clipToBounds()
+            .background(Color(0xFF141F14))
+            .testTag("interactive_map_container")
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val width = size.width
-            val height = size.height
-
-            // 1. Draw agricultural soil/paddy background grid
-            drawMissionGrid(width, height)
-
-            if (boundary.isEmpty()) return@Canvas
-
-            val origin = PolygonMath.calculateCentroid(boundary)
-            val metricBoundary = boundary.map { PolygonMath.toLocalMeters(it, origin) }
-
-            var minX = metricBoundary.minOf { it.x }
-            var maxX = metricBoundary.maxOf { it.x }
-            var minY = metricBoundary.minOf { it.y }
-            var maxY = metricBoundary.maxOf { it.y }
-
-            val spanX = max(maxX - minX, 15.0)
-            val spanY = max(maxY - minY, 15.0)
-
-            val padding = 40f
-            val drawWidth = width - padding * 2
-            val drawHeight = height - padding * 2
-
-            val scale = min(drawWidth / spanX.toFloat(), drawHeight / spanY.toFloat())
-
-            val midMetricX = (minX + maxX) / 2.0
-            val midMetricY = (minY + maxY) / 2.0
-            val canvasCenterX = width / 2f
-            val canvasCenterY = height / 2f
-
-            fun toCanvas(metricX: Double, metricY: Double): Offset {
-                val dx = (metricX - midMetricX).toFloat() * scale
-                val dy = -(metricY - midMetricY).toFloat() * scale
-                return Offset(canvasCenterX + dx, canvasCenterY + dy)
-            }
-
-            fun geoToCanvas(point: GeoPoint): Offset {
-                val m = PolygonMath.toLocalMeters(point, origin)
-                return toCanvas(m.x, m.y)
-            }
-
-            // 2. Draw Field Polygon Boundary
-            val boundaryOffsets = metricBoundary.map { toCanvas(it.x, it.y) }
-            if (boundaryOffsets.size >= 3) {
-                val polyPath = Path().apply {
-                    moveTo(boundaryOffsets[0].x, boundaryOffsets[0].y)
-                    for (i in 1 until boundaryOffsets.size) {
-                        lineTo(boundaryOffsets[i].x, boundaryOffsets[i].y)
-                    }
-                    close()
-                }
-
-                drawPath(
-                    path = polyPath,
-                    color = Color(0x2B4CAF50),
-                    style = Fill
-                )
-                drawPath(
-                    path = polyPath,
-                    color = Green800,
-                    style = Stroke(
-                        width = 3.5.dp.toPx(),
-                        pathEffect = PathEffect.cornerPathEffect(8f)
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { tapPos ->
+                            if (scale > 1.3f) {
+                                resetView()
+                            } else {
+                                val targetScale = 2.5f
+                                // Zoom in centered around the double-tap point
+                                panOffset = (panOffset - tapPos) * (targetScale / scale) + tapPos
+                                scale = targetScale
+                            }
+                        }
                     )
-                )
-            }
-
-            // 3. Draw Route Lanes & Transitions
-            if (waypoints.isNotEmpty()) {
-                val waypointOffsets = waypoints.map {
-                    geoToCanvas(GeoPoint(it.lat, it.lon))
                 }
-
-                val currentLane = telemetry?.currentLaneIndex ?: 0
-
-                for (i in 0 until waypointOffsets.size - 1) {
-                    val p1 = waypointOffsets[i]
-                    val p2 = waypointOffsets[i + 1]
-                    val wp = waypoints[i]
-
-                    val isCompleted = wp.laneIndex < currentLane
-                    val isCurrent = wp.laneIndex == currentLane
-
-                    val laneColor = when {
-                        isCompleted -> SuccessGreen
-                        isCurrent -> Color(0xFF1E88E5)
-                        else -> Color(0xFF90CAF9)
+                .pointerInput(Unit) {
+                    detectTransformGestures { centroid, pan, zoom, _ ->
+                        val newScale = (scale * zoom).coerceIn(0.6f, 12.0f)
+                        // Zoom around gesture centroid
+                        panOffset = (panOffset - centroid) * (newScale / scale) + centroid + pan
+                        scale = newScale
                     }
+                }
+                .testTag("svg_map_canvas")
+        ) {
+            val w = size.width
+            val h = size.height
+            if (w <= 0 || h <= 0) return@Canvas
 
-                    val strokeWidth = if (isCurrent) 4.dp.toPx() else 2.5.dp.toPx()
+            // 1. Draw Static Dark Background
+            drawRect(color = Color(0xFF141F14))
 
+            // 2. Transform Scope for zoom & pan
+            withTransform({
+                translate(left = panOffset.x, top = panOffset.y)
+                scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
+            }) {
+                // Dynamic Grid Lines
+                val gridStep = 40f
+                val startX = -1000f
+                val endX = w + 1000f
+                val startY = -1000f
+                val endY = h + 1000f
+
+                var gx = startX
+                while (gx < endX) {
                     drawLine(
-                        color = laneColor,
-                        start = p1,
-                        end = p2,
-                        strokeWidth = strokeWidth,
-                        cap = StrokeCap.Round
+                        color = Color(0x18FFFFFF),
+                        start = Offset(gx, startY),
+                        end = Offset(gx, endY),
+                        strokeWidth = 1f / scale
                     )
+                    gx += gridStep
+                }
+                var gy = startY
+                while (gy < endY) {
+                    drawLine(
+                        color = Color(0x18FFFFFF),
+                        start = Offset(startX, gy),
+                        end = Offset(endX, gy),
+                        strokeWidth = 1f / scale
+                    )
+                    gy += gridStep
                 }
 
-                // Draw Start & End Markers
-                val startPos = waypointOffsets.first()
-                val endPos = waypointOffsets.last()
+                val pad = 40f
+                val uw = (w - pad * 2).coerceAtLeast(10f)
+                val uh = (h - pad * 2).coerceAtLeast(10f)
 
-                // Start Marker (Green circle with S)
-                drawCircle(
-                    color = SuccessGreen,
-                    radius = 8.dp.toPx(),
-                    center = startPos
-                )
-                drawCircle(
-                    color = Color.White,
-                    radius = 4.dp.toPx(),
-                    center = startPos
-                )
+                fun toCanvas(pt: GeoPoint): Offset {
+                    val px = pad + ((pt.longitude - minLon) / lonSpan * uw).toFloat()
+                    val py = pad + ((maxLat - pt.latitude) / latSpan * uh).toFloat()
+                    return Offset(px, py)
+                }
 
-                // End Marker (Red circle)
-                drawCircle(
-                    color = ErrorRed,
-                    radius = 8.dp.toPx(),
-                    center = endPos
-                )
-                drawCircle(
-                    color = Color.White,
-                    radius = 4.dp.toPx(),
-                    center = endPos
-                )
-            }
-
-            // 4. Draw Rover Machine Robot
-            if (telemetry != null) {
-                val machinePos = geoToCanvas(GeoPoint(telemetry.positionLat, telemetry.positionLon))
-                val heading = telemetry.headingDeg
-
-                // Radar glow
-                drawCircle(
-                    color = Color(0x33FFB300),
-                    radius = 18.dp.toPx(),
-                    center = machinePos
-                )
-
-                // Rover Body (Rotated with Heading)
-                rotate(degrees = heading, pivot = machinePos) {
-                    // Rover chassis
-                    val chassisWidth = 20.dp.toPx()
-                    val chassisHeight = 26.dp.toPx()
-                    val chassisRect = androidx.compose.ui.geometry.Rect(
-                        machinePos.x - chassisWidth / 2f,
-                        machinePos.y - chassisHeight / 2f,
-                        machinePos.x + chassisWidth / 2f,
-                        machinePos.y + chassisHeight / 2f
-                    )
-                    drawRoundRect(
-                        color = Color(0xFFFFB300),
-                        topLeft = chassisRect.topLeft,
-                        size = chassisRect.size,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                        style = Fill
-                    )
-                    drawRoundRect(
-                        color = Color(0xFFE65100),
-                        topLeft = chassisRect.topLeft,
-                        size = chassisRect.size,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                        style = Stroke(width = 2.dp.toPx())
-                    )
-
-                    // Direction Arrow (Heading Pointer)
-                    val arrowPath = Path().apply {
-                        moveTo(machinePos.x, machinePos.y - chassisHeight / 2f - 4.dp.toPx())
-                        lineTo(machinePos.x - 5.dp.toPx(), machinePos.y - chassisHeight / 2f + 4.dp.toPx())
-                        lineTo(machinePos.x + 5.dp.toPx(), machinePos.y - chassisHeight / 2f + 4.dp.toPx())
+                // Draw Field Boundary Polygon
+                if (boundary.size >= 3) {
+                    val polyScreen = boundary.map { toCanvas(it) }
+                    val polyPath = Path().apply {
+                        moveTo(polyScreen[0].x, polyScreen[0].y)
+                        for (i in 1 until polyScreen.size) {
+                            lineTo(polyScreen[i].x, polyScreen[i].y)
+                        }
                         close()
                     }
-                    drawPath(arrowPath, color = Color(0xFFD50000))
+                    // Sawah Fill & Border
+                    drawPath(polyPath, color = Color(0x2810B981))
+                    drawPath(
+                        polyPath,
+                        color = Green600,
+                        style = Stroke(width = (2.8f / scale).coerceAtLeast(1.5f))
+                    )
+
+                    // Corner vertex pins
+                    polyScreen.forEach { vertex ->
+                        drawCircle(
+                            color = Green700,
+                            radius = (4f / scale).coerceIn(2.5f, 6f),
+                            center = vertex
+                        )
+                    }
+                }
+
+                // Draw Planned Planting Swaths & Trajectory
+                if (waypoints.size >= 2) {
+                    val wpScreen = waypoints.map { toCanvas(it) }
+                    val wpPath = Path().apply {
+                        moveTo(wpScreen[0].x, wpScreen[0].y)
+                        for (i in 1 until wpScreen.size) {
+                            lineTo(wpScreen[i].x, wpScreen[i].y)
+                        }
+                    }
+
+                    // Main Planting Path Line (High visibility neon agricultural green)
+                    drawPath(
+                        wpPath,
+                        color = Color(0xFF00E676),
+                        style = Stroke(width = (2.2f / scale).coerceIn(1.2f, 3.5f))
+                    )
+
+                    // Directional arrows along long straight swaths
+                    if (showDirectionArrows && scale >= 1.2f) {
+                        for (i in 0 until wpScreen.size - 1 step 2) {
+                            val p1 = wpScreen[i]
+                            val p2 = wpScreen[i + 1]
+                            val dx = p2.x - p1.x
+                            val dy = p2.y - p1.y
+                            val dist = sqrt(dx * dx + dy * dy)
+                            if (dist > 25f) {
+                                val mid = Offset((p1.x + p2.x) / 2, (p1.y + p2.y) / 2)
+                                val angle = atan2(dy, dx)
+                                val arrowLen = (7f / scale).coerceIn(4f, 10f)
+                                val a1 = Offset(
+                                    mid.x - arrowLen * cos(angle - Math.PI / 6).toFloat(),
+                                    mid.y - arrowLen * sin(angle - Math.PI / 6).toFloat()
+                                )
+                                val a2 = Offset(
+                                    mid.x - arrowLen * cos(angle + Math.PI / 6).toFloat(),
+                                    mid.y - arrowLen * sin(angle + Math.PI / 6).toFloat()
+                                )
+                                drawLine(
+                                    color = Color(0xFFB9F6CA),
+                                    start = mid,
+                                    end = a1,
+                                    strokeWidth = (1.8f / scale).coerceAtLeast(1f)
+                                )
+                                drawLine(
+                                    color = Color(0xFFB9F6CA),
+                                    start = mid,
+                                    end = a2,
+                                    strokeWidth = (1.8f / scale).coerceAtLeast(1f)
+                                )
+                            }
+                        }
+                    }
+
+                    // Waypoint dots when inspected closely
+                    if (scale >= 2.2f) {
+                        wpScreen.forEachIndexed { idx, pt ->
+                            if (idx % 2 == 0) {
+                                drawCircle(
+                                    color = Color(0xCC00E676),
+                                    radius = (3f / scale).coerceIn(1.5f, 4f),
+                                    center = pt
+                                )
+                            }
+                        }
+                    }
+
+                    // Start Point Marker (Green Flag / Pin)
+                    drawCircle(
+                        color = Color(0xFF00E676),
+                        radius = (8f / scale).coerceIn(4f, 10f),
+                        center = wpScreen.first()
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = (4f / scale).coerceIn(2f, 5f),
+                        center = wpScreen.first()
+                    )
+
+                    // Finish Point Marker (Red Flag / Target)
+                    drawCircle(
+                        color = ErrorRed,
+                        radius = (8f / scale).coerceIn(4f, 10f),
+                        center = wpScreen.last()
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = (4f / scale).coerceIn(2f, 5f),
+                        center = wpScreen.last()
+                    )
+                }
+
+                // Draw Active Machine Telemetry & Rover Position
+                if (telemetry != null && telemetry.latitude != 0.0) {
+                    val machinePos = toCanvas(GeoPoint(telemetry.latitude, telemetry.longitude))
+                    val roverHeadingRad = Math.toRadians(telemetry.headingDeg - 90.0)
+
+                    // Pulse Beacon Glow
+                    drawCircle(
+                        color = Color(0x44F59E0B),
+                        radius = (16f / scale).coerceIn(8f, 22f),
+                        center = machinePos
+                    )
+                    // Machine Outer Halo
+                    drawCircle(
+                        color = RouteMachineColor,
+                        radius = (9f / scale).coerceIn(4.5f, 12f),
+                        center = machinePos
+                    )
+                    // Machine Core
+                    drawCircle(
+                        color = Color.White,
+                        radius = (4.5f / scale).coerceIn(2.5f, 6f),
+                        center = machinePos
+                    )
+
+                    // Direction Heading Pointer Arrow
+                    val pointerLen = (15f / scale).coerceIn(8f, 20f)
+                    val pointerEnd = Offset(
+                        machinePos.x + (pointerLen * cos(roverHeadingRad)).toFloat(),
+                        machinePos.y + (pointerLen * sin(roverHeadingRad)).toFloat()
+                    )
+                    drawLine(
+                        color = Color(0xFFFBBF24),
+                        start = machinePos,
+                        end = pointerEnd,
+                        strokeWidth = (3f / scale).coerceIn(1.5f, 4f)
+                    )
+                }
+            }
+        }
+
+        // Overlay 1: Top Right Zoom Level & Help Badge
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0x88000000),
+                modifier = Modifier.testTag("zoom_level_badge")
+            ) {
+                Text(
+                    text = "${String.format("%.1f", scale)}x",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        // Overlay 2: Top Left Inspection Guidance (visible when not zoomed)
+        AnimatedVisibility(
+            visible = scale <= 1.05f,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0x66000000)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Pinch,
+                        contentDescription = null,
+                        tint = Color(0xCCFFFFFF),
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Pinch & Pan untuk Detail Jalur",
+                        color = Color(0xCCFFFFFF),
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+
+        // Overlay 3: Floating Zoom & Pan Precision Buttons (Bottom Right)
+        if (enableZoomControls) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Center on Machine Rover (if telemetry available)
+                if (telemetry != null && telemetry.latitude != 0.0) {
+                    MapControlButton(
+                        icon = Icons.Default.MyLocation,
+                        description = "Fokus Posisi Mesin",
+                        testTag = "btn_center_machine",
+                        onClick = {
+                            scale = 3.0f
+                            // Center calculation is handled next frame
+                            panOffset = Offset.Zero
+                        }
+                    )
+                }
+
+                // Zoom In (+)
+                MapControlButton(
+                    icon = Icons.Default.Add,
+                    description = "Perbesar Peta",
+                    testTag = "btn_zoom_in",
+                    onClick = {
+                        val newScale = (scale * 1.35f).coerceAtMost(12.0f)
+                        scale = newScale
+                    }
+                )
+
+                // Zoom Out (-)
+                MapControlButton(
+                    icon = Icons.Default.Remove,
+                    description = "Perkecil Peta",
+                    testTag = "btn_zoom_out",
+                    onClick = {
+                        val newScale = (scale / 1.35f).coerceAtLeast(0.6f)
+                        scale = newScale
+                    }
+                )
+
+                // Reset View / 100% Fit
+                if (scale != 1.0f || panOffset != Offset.Zero) {
+                    MapControlButton(
+                        icon = Icons.Default.FilterCenterFocus,
+                        description = "Reset Tampilan Peta",
+                        testTag = "btn_reset_zoom",
+                        onClick = { resetView() }
+                    )
+                }
+            }
+        }
+
+        // Overlay 4: Dynamic Metric Scale Bar (Bottom Left)
+        if (showScaleBar) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0x77000000),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp)
+                    .testTag("scale_bar_indicator")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Approximate real scale calculation
+                    val approxMetersPerDegree = 111320.0
+                    val fieldWidthM = lonSpan * approxMetersPerDegree * cos(Math.toRadians(minLat))
+                    val barMeters = (fieldWidthM / (4.0 * scale)).coerceIn(0.5, 500.0)
+                    val barLabel = if (barMeters >= 100) {
+                        String.format("%.0f m", barMeters)
+                    } else if (barMeters >= 10) {
+                        String.format("%.0f m", barMeters)
+                    } else {
+                        String.format("%.1f m", barMeters)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .width(36.dp)
+                            .height(3.dp)
+                            .background(Color.White, RoundedCornerShape(2.dp))
+                    )
+                    Text(
+                        text = barLabel,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
     }
 }
 
-private fun DrawScope.drawMissionGrid(width: Float, height: Float) {
-    val step = 20.dp.toPx()
-    val color = Color(0x1433691E)
-    var x = 0f
-    while (x <= width) {
-        drawLine(color, Offset(x, 0f), Offset(x, height), 1f)
-        x += step
-    }
-    var y = 0f
-    while (y <= height) {
-        drawLine(color, Offset(0f, y), Offset(width, y), 1f)
-        y += step
+@Composable
+private fun MapControlButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    testTag: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = CircleShape,
+        color = Color(0xCC1F2937),
+        tonalElevation = 4.dp,
+        shadowElevation = 4.dp,
+        modifier = Modifier
+            .size(34.dp)
+            .clickable { onClick() }
+            .testTag(testTag)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }

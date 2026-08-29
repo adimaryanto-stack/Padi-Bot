@@ -38,7 +38,6 @@ fun CreateFieldScreen(
     }
 
     val telemetry by viewModel.telemetry.collectAsState()
-    val isConnected by viewModel.isMachineConnected.collectAsState()
 
     var manualLat by remember { mutableStateOf(String.format("%.6f", if (telemetry.latitude != 0.0) telemetry.latitude else -6.923500)) }
     var manualLon by remember { mutableStateOf(String.format("%.6f", if (telemetry.longitude != 0.0) telemetry.longitude else 107.610500)) }
@@ -199,7 +198,7 @@ fun CreateFieldScreen(
                         ) {
                             Icon(imageVector = Icons.Default.AddLocation, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("+ Titik GPS Terkini", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("+ Titik GPS", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
 
                         OutlinedButton(
@@ -218,7 +217,7 @@ fun CreateFieldScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (isWalkAndMapActive) "Selesai Rekam" else "Walk & Map", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(if (isWalkAndMapActive) "Selesai" else "Walk & Map", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -236,7 +235,7 @@ fun CreateFieldScreen(
                                 Text("🚶‍♂️", fontSize = 18.sp)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Mode Walk & Map Aktif: Berjalanlah di pematang sawah dan tekan '+ Titik GPS Terkini' di setiap sudut batas sawah.",
+                                    text = "Mode Walk & Map Aktif: Berjalanlah di pematang sawah dan tekan '+ Titik GPS' di setiap sudut batas sawah.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Green800
                                 )
@@ -397,7 +396,11 @@ fun CreateFieldScreen(
                     color = ErrorRed,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold
-        // 3-Button Bottom Mapping Action Bar (Sesuai preview.webp Screen 2)
+                )
+            }
+        }
+
+        // 3-Button Bottom Mapping Action Bar
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -469,6 +472,7 @@ fun CreateFieldScreen(
                 }
             }
         }
+    }
 
     // Dialog Input Koordinat Manual / GPS Auto-Fill
     if (showManualDialog) {
@@ -477,7 +481,6 @@ fun CreateFieldScreen(
             title = { Text("Tambah Titik Koordinat", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Tombol Otomatis GPS
                     FilledTonalButton(
                         onClick = {
                             val currentLoc = viewModel.getCurrentGpsLocation()

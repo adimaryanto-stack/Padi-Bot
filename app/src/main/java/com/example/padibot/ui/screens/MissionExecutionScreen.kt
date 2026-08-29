@@ -1,8 +1,5 @@
 package com.example.padibot.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,7 +10,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -21,70 +17,158 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.padibot.model.MissionStatus
 import com.example.padibot.theme.*
-import com.example.padibot.ui.components.EmergencyStopButton
-import com.example.padibot.ui.components.GpsStatusBadge
-import com.example.padibot.ui.components.LiveMissionCanvas
-import com.example.padibot.ui.components.MissionStatusBadge
+import com.example.padibot.ui.components.*
 import com.example.padibot.viewmodel.PadiBotViewModel
 
 @Composable
 fun MissionExecutionScreen(
     viewModel: PadiBotViewModel,
-    onNavigateBackToHome: () -> Unit
+    onNavigateToManualControl: () -> Unit = {},
+    onNavigateToHistory: () -> Unit = {},
+    onNavigateBackToHome: () -> Unit = onNavigateToHistory
 ) {
     val activeMission by viewModel.activeMission.collectAsState()
-    val missionStatus by viewModel.activeMissionStatus.collectAsState()
+    val missionStatus by viewModel.missionStatus.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
     val selectedField by viewModel.selectedField.collectAsState()
-
-    var showStopDialog by remember { mutableStateOf(false) }
-
-    val progressPct = telemetry.missionProgressPct
-    val isRunning = missionStatus == MissionStatus.RUNNING
-    val isPaused = missionStatus == MissionStatus.PAUSED
-    val isCompleted = missionStatus == MissionStatus.COMPLETED
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Mission Header Bar
+        // Status and Progress Header
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().testTag("mission_execution_header_card")
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = activeMission?.name ?: "Misi Tanam Aktif",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Green900
+                            )
+                            Text(
+                                text = "Petak: ${activeMission?.fieldName ?: selectedField?.name ?: "Sawah"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Gray600
+                            )
+                        }
+                        MissionStatusBadge(status = missionStatus)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Progress Penanaman", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            text = activeMission?.name ?: "Misi Tanam Aktif",
+                            text = "${String.format("%.1f", telemetry.missionProgressPct)}%",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${selectedField?.name ?: "Sawah"} • ${telemetry.currentLaneIndex} / ${activeMission?.totalLanes ?: telemetry.totalLanes} Jalur",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontWeight = FontWeight.Bold,
+                            color = Green700
                         )
                     }
 
-                    MissionStatusBadge(status = missionStatus)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    LinearProgressIndicator(
+                        progress = { telemetry.missionProgressPct / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp),
+                        color = Green600,
+                        trackColor = Green100,
+                    )
                 }
             }
         }
 
-        // 2. Live Field Dynamic Canvas
+        // Live Telemetry Grid
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Telemetri Mesin Realtime", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        GpsStatusBadge(gpsStatus = telemetry.gpsStatus, accuracyM = telemetry.positionAccuracyM)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TelemetryMetricCard(
+                            label = "Baterai",
+                            value = "${telemetry.batteryPct.toInt()}%",
+                            icon = Icons.Default.BatteryChargingFull,
+                            color = if (telemetry.batteryPct > 20f) SuccessGreen else ErrorRed,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TelemetryMetricCard(
+                            label = "Kecepatan",
+                            value = "${String.format("%.2f", telemetry.speedMps)} m/s",
+                            icon = Icons.Default.Speed,
+                            color = InfoBlue,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TelemetryMetricCard(
+                            label = "Heading",
+                            value = "${telemetry.headingDeg.toInt()}°",
+                            icon = Icons.Default.Navigation,
+                            color = WarningOrange,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (telemetry.isPlantingActive) Green100 else Gray200,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(if (telemetry.isPlantingActive) "🌱" else "⏸️", fontSize = 16.sp)
+                                Text(
+                                    text = if (telemetry.isPlantingActive) "Mekanisme Tanam: AKTIF (Bibit Tertanam)" else "Mekanisme Tanam: STANDBY",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (telemetry.isPlantingActive) Green900 else Gray800
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Live GIS Map with Machine Position
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -93,6 +177,13 @@ fun MissionExecutionScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Pelacakan Posisi Otonom",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     LiveMissionCanvas(
                         boundary = selectedField?.boundary ?: emptyList(),
                         waypoints = activeMission?.route ?: emptyList(),
@@ -100,278 +191,94 @@ fun MissionExecutionScreen(
                         modifier = Modifier.height(280.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Posisi Robot: ${String.format("%.6f, %.6f", telemetry.positionLat, telemetry.positionLon)}",
-                            style = CoordinateFont,
-                            color = Gray600
-                        )
-                        Text(
-                            text = "Heading: ${telemetry.headingDeg.toInt()}°",
-                            style = CoordinateFont,
-                            color = Gray800
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3. Compact Telemetry Grid Strip
-        item {
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TelemetryStatItem(
-                        icon = Icons.Default.BatteryChargingFull,
-                        label = "Baterai",
-                        value = "${telemetry.batteryPct.toInt()}%",
-                        color = if (telemetry.batteryPct < 20f) ErrorRed else SuccessGreen
-                    )
-                    TelemetryStatItem(
-                        icon = Icons.Default.LocationOn,
-                        label = "GPS",
-                        value = "Fix (±${String.format("%.1f", telemetry.positionAccuracyM)}m)",
-                        color = Green700
-                    )
-                    TelemetryStatItem(
-                        icon = Icons.Default.Speed,
-                        label = "Kecepatan",
-                        value = String.format("%.2f m/s", telemetry.speedMps),
-                        color = InfoBlue
-                    )
-                    TelemetryStatItem(
-                        icon = Icons.Default.ViewStream,
-                        label = "Jalur",
-                        value = "${telemetry.currentLaneIndex}/${activeMission?.totalLanes ?: telemetry.totalLanes}",
-                        color = Gray900
-                    )
-                }
-            }
-        }
-
-        // 4. Progress Bar & Time Remaining
-        item {
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Green50),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Kemajuan Penanaman",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Green900
-                        )
-                        Text(
-                            text = "${progressPct.toInt()}% Selesai",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Green700
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    LinearProgressIndicator(
-                        progress = { (progressPct / 100f).coerceIn(0f, 1f) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(6.dp)),
-                        color = Green700,
-                        trackColor = Gray200
-                    )
-
                     Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Estimasi Selesai: ±${telemetry.remainingMinutes} Menit",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray600
-                        )
-                        Text(
-                            text = "Area Tertanam: ±${telemetry.plantedAreaM2.toInt()} m²",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray600
-                        )
-                    }
+                    Text(
+                        text = "Koordinat: ${String.format("%.6f", telemetry.latitude)}, ${String.format("%.6f", telemetry.longitude)}",
+                        style = CoordinateFont,
+                        fontSize = 11.sp,
+                        color = Gray600
+                    )
                 }
             }
         }
 
-        // 5. Mission Control Buttons (Pause, Resume, Stop)
+        // Mission Control Buttons
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (isRunning) {
+                if (missionStatus == MissionStatus.RUNNING) {
                     Button(
-                        onClick = { viewModel.pauseMissionExecution() },
+                        onClick = { viewModel.pauseMission() },
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp)
+                            .height(50.dp)
                             .testTag("button_pause_mission"),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = WarningOrange)
                     ) {
                         Icon(imageVector = Icons.Default.Pause, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("PAUSE", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("Jeda Misi", fontWeight = FontWeight.Bold)
                     }
-                } else if (isPaused) {
+                } else if (missionStatus == MissionStatus.PAUSED || missionStatus == MissionStatus.READY) {
                     Button(
-                        onClick = { viewModel.resumeMissionExecution() },
+                        onClick = { viewModel.resumeMission() },
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp)
+                            .height(50.dp)
                             .testTag("button_resume_mission"),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Green700)
                     ) {
                         Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("RESUME", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("Lanjutkan", fontWeight = FontWeight.Bold)
                     }
                 }
 
                 OutlinedButton(
-                    onClick = { showStopDialog = true },
+                    onClick = onNavigateToManualControl,
                     modifier = Modifier
                         .weight(1f)
-                        .height(52.dp)
-                        .testTag("button_stop_mission"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)
+                        .height(50.dp)
+                        .testTag("button_switch_manual"),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Stop, contentDescription = null, tint = ErrorRed)
+                    Icon(imageVector = Icons.Default.SportsEsports, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("STOP MISI", fontWeight = FontWeight.Bold, color = ErrorRed)
+                    Text("Manual D-Pad", fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        // 6. Emergency Stop Safety Button
+        // Emergency Stop Button
         item {
             EmergencyStopButton(
                 onEmergencyStop = {
-                    viewModel.triggerEmergencyStop()
+                    viewModel.emergencyStop("Tombol Darurat Ditekan Operator")
                 }
             )
         }
     }
-
-    // Stop Mission Confirmation Dialog
-    if (showStopDialog) {
-        AlertDialog(
-            onDismissRequest = { showStopDialog = false },
-            title = { Text("Hentikan Misi Tanam?", fontWeight = FontWeight.Bold) },
-            text = {
-                Text("Mesin akan berhenti di posisi saat ini dan status misi akan disimpan sebagai dihentikan.")
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.stopMissionExecution()
-                        showStopDialog = false
-                        onNavigateBackToHome()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
-                ) {
-                    Text("Hentikan", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showStopDialog = false }) {
-                    Text("Lanjutkan Misi")
-                }
-            }
-        )
-    }
-
-    // Mission Completed Dialog
-    if (isCompleted) {
-        AlertDialog(
-            onDismissRequest = onNavigateBackToHome,
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = SuccessGreen,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Misi Tanam Selesai!", fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Seluruh jalur tanam pada sawah berhasil diselesaikan dengan sukses.")
-                    Text("• Total Jalur: ${activeMission?.totalLanes} Jalur", fontWeight = FontWeight.SemiBold)
-                    Text("• Estimasi Cakupan: 96.5%", fontWeight = FontWeight.SemiBold)
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = onNavigateBackToHome,
-                    colors = ButtonDefaults.buttonColors(containerColor = Green700)
-                ) {
-                    Text("Kembali ke Beranda", fontWeight = FontWeight.Bold)
-                }
-            }
-        )
-    }
 }
 
+/**
+ * Composable alias for ExecutionView
+ */
 @Composable
-private fun TelemetryStatItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    value: String,
-    color: androidx.compose.ui.graphics.Color
+fun ExecutionView(
+    viewModel: PadiBotViewModel,
+    onNavigateToManualControl: () -> Unit = {},
+    onNavigateToHistory: () -> Unit = {},
+    onNavigateBackToHome: () -> Unit = onNavigateToHistory
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = color,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Gray600
-        )
-    }
+    MissionExecutionScreen(
+        viewModel = viewModel,
+        onNavigateToManualControl = onNavigateToManualControl,
+        onNavigateToHistory = onNavigateToHistory,
+        onNavigateBackToHome = onNavigateBackToHome
+    )
 }
+

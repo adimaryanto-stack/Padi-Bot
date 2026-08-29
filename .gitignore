@@ -4,6 +4,7 @@ build/
 app/build/
 *.apk
 *.aab
+*.zip
 
 # Dependencies
 node_modules/

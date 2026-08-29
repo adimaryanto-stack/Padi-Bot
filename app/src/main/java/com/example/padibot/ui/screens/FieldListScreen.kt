@@ -11,13 +11,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.padibot.model.Field
-import com.example.padibot.theme.ErrorRed
-import com.example.padibot.theme.Green700
+import com.example.padibot.theme.*
 import com.example.padibot.ui.components.FieldMapCanvas
 import com.example.padibot.viewmodel.PadiBotViewModel
 
@@ -25,107 +25,176 @@ import com.example.padibot.viewmodel.PadiBotViewModel
 fun FieldListScreen(
     viewModel: PadiBotViewModel,
     onNavigateToCreateField: () -> Unit,
-    onNavigateToPlantingSettings: (Field) -> Unit
+    onNavigateToPlantingSettings: () -> Unit
 ) {
-    val fields by viewModel.allFields.collectAsState()
-    var searchQuery by remember { mutableStateOf("") }
+    val allFields by viewModel.allFields.collectAsState()
+    val selectedField by viewModel.selectedField.collectAsState()
     var fieldToDelete by remember { mutableStateOf<Field?>(null) }
-
-    val filteredFields = fields.filter {
-        it.name.contains(searchQuery, ignoreCase = true)
-    }
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = onNavigateToCreateField,
                 containerColor = Green700,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
+                contentColor = Color.White,
+                icon = { Icon(Icons.Default.AddLocationAlt, contentDescription = null) },
+                text = { Text("Tambah Sawah", fontWeight = FontWeight.Bold) },
                 modifier = Modifier.testTag("fab_add_field")
-            ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Tambah Sawah")
-            }
+            )
         }
-    ) { paddingValues ->
-        Column(
+    ) { innerPadding ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("input_search_fields"),
-                placeholder = { Text("Cari sawah berdasarkan nama...") },
-                leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (filteredFields.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Grass,
-                            contentDescription = null,
-                            tint = Green700,
-                            modifier = Modifier.size(64.dp)
-                        )
-                        Text(
-                            text = if (searchQuery.isBlank()) "Belum Ada Sawah Terdaftar" else "Sawah Tidak Ditemukan",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Tekan tombol + di bawah untuk memetakan sawah baru.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Icon(imageVector = Icons.Default.Map, contentDescription = null, tint = Green700, modifier = Modifier.size(32.dp))
+                        Column {
+                            Text("Manajemen Petak Sawah", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("${allFields.size} Petak Sawah Terdaftar • Siap Eksekusi Tanam", style = MaterialTheme.typography.bodySmall, color = Gray600)
+                        }
+                    }
+                }
+            }
+
+            if (allFields.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🌾", fontSize = 48.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Belum Ada Petak Sawah", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Tekan tombol 'Tambah Sawah' untuk membuat peta batas baru.", style = MaterialTheme.typography.bodySmall, color = Gray600)
+                        }
                     }
                 }
             } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
-                    items(filteredFields, key = { it.id }) { field ->
-                        FieldCardItem(
-                            field = field,
-                            onSelect = {
-                                viewModel.selectField(field)
-                                onNavigateToPlantingSettings(field)
-                            },
-                            onDelete = { fieldToDelete = field }
-                        )
+                items(allFields) { field ->
+                    val isSelected = field.id == selectedField?.id
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) Green50 else MaterialTheme.colorScheme.surface
+                        ),
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Green700) else androidx.compose.foundation.BorderStroke(1.dp, Gray200),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.selectField(field) }
+                            .testTag("field_card_${field.id}")
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = field.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSelected) Green900 else Gray900
+                                    )
+                                    Text(
+                                        text = "📐 Luas: ${field.formatArea()} • ${field.boundary.size} Titik Batas",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Gray600
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (isSelected) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Green700,
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = "Aktif",
+                                                color = Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+
+                                    IconButton(onClick = { fieldToDelete = field }) {
+                                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Hapus", tint = ErrorRed)
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Mini GIS Map Preview
+                            FieldMapCanvas(
+                                boundary = field.boundary,
+                                heightDp = 120
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.selectField(field)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(if (isSelected) "✓ Terpilih" else "Pilih Sawah")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        viewModel.selectField(field)
+                                        onNavigateToPlantingSettings()
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Green700)
+                                ) {
+                                    Text("Rencanakan Tanam →", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // Delete Confirmation Dialog
     if (fieldToDelete != null) {
         val field = fieldToDelete!!
         AlertDialog(
             onDismissRequest = { fieldToDelete = null },
-            title = { Text("Hapus Sawah?", fontWeight = FontWeight.Bold) },
-            text = {
-                Text("Sawah '${field.name}' akan dihapus dari sistem.")
-            },
+            title = { Text("Hapus Sawah", fontWeight = FontWeight.Bold) },
+            text = { Text("Apakah Anda yakin ingin menghapus '${field.name}'?") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -134,7 +203,7 @@ fun FieldListScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
                 ) {
-                    Text("Hapus", fontWeight = FontWeight.Bold)
+                    Text("Hapus")
                 }
             },
             dismissButton = {
@@ -143,81 +212,5 @@ fun FieldListScreen(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun FieldCardItem(
-    field: Field,
-    onSelect: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth().testTag("field_card_${field.id}")
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = field.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${field.boundary.size} Titik Batas • Keliling ${field.formatPerimeter()}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "Hapus Sawah",
-                        tint = ErrorRed
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Mini polygon canvas preview
-            FieldMapCanvas(
-                points = field.boundary,
-                modifier = Modifier.height(140.dp)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Luas: ${field.formatArea()}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Green700
-                )
-
-                Button(
-                    onClick = onSelect,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Green700)
-                ) {
-                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Mulai Misi", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
     }
 }

@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -21,32 +20,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.padibot.R
-import com.example.padibot.model.Field
-import com.example.padibot.model.Mission
+import com.example.padibot.model.MissionStatus
 import com.example.padibot.theme.*
-import com.example.padibot.ui.components.EmergencyStopButton
-import com.example.padibot.ui.components.GpsStatusBadge
-import com.example.padibot.ui.components.MissionStatusBadge
+import com.example.padibot.ui.components.*
 import com.example.padibot.viewmodel.PadiBotViewModel
 
 @Composable
 fun DashboardScreen(
     viewModel: PadiBotViewModel,
-    onNavigateToPlantingSettings: () -> Unit,
-    onNavigateToManualControl: () -> Unit,
-    onNavigateToFields: () -> Unit,
-    onNavigateToHistory: () -> Unit,
-    onNavigateToMissionDetail: (String) -> Unit
+    onNavigateToPlantingSettings: () -> Unit = {},
+    onNavigateToManualControl: () -> Unit = {},
+    onNavigateToFields: () -> Unit = {},
+    onNavigateToHistory: () -> Unit = {},
+    onNavigateToMissionDetail: (String) -> Unit = {},
+    onNavigateToCreateField: () -> Unit = {},
+    onNavigateToFieldList: () -> Unit = onNavigateToFields,
+    onNavigateToExecution: () -> Unit = {}
 ) {
-    val selectedField by viewModel.selectedField.collectAsState()
-    val allFields by viewModel.allFields.collectAsState()
-    val allMissions by viewModel.allMissions.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
-    val isConnected by viewModel.isMachineConnected.collectAsState()
-    val settings by viewModel.machineSettings.collectAsState()
-
-    var showFieldSelectorDialog by remember { mutableStateOf(false) }
-    val lastMission = allMissions.firstOrNull()
+    val isConnected by viewModel.isConnected.collectAsState()
+    val selectedField by viewModel.selectedField.collectAsState()
+    val activeMission by viewModel.activeMission.collectAsState()
+    val missionStatus by viewModel.missionStatus.collectAsState()
+    val allFields by viewModel.allFields.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -55,340 +51,126 @@ fun DashboardScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Hero Card Banner
+        // Hero Card with Indonesian Rice Paddy Header & Quick Status
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().testTag("dashboard_hero_card")
+                colors = CardDefaults.cardColors(containerColor = Green900),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("dashboard_hero_card")
             ) {
-                Column {
-                    Box(
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_hero_paddy),
+                        contentDescription = "PadiBot Banner",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(140.dp)
+                            .height(130.dp),
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.4f
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_hero_paddy),
-                            contentDescription = "PadiBot Sawah Hero",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.35f))
-                        )
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(16.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "PadiBot Smart Planter",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "Presisi Pertanian • Otonom & Efisien",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
+                            Column {
+                                Text(
+                                    text = "PadiBot Autonomous",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Sistem Mesin Tanam Padi Pintar Berbasis GIS",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Green200
+                                )
+                            }
 
-        // 2. Machine Telemetry Status Card
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().testTag("dashboard_telemetry_card")
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Status Mesin Tanam",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        GpsStatusBadge(
-                            gpsStatus = telemetry.gpsStatus,
-                            accuracyM = telemetry.positionAccuracyM
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        TelemetryTile(
-                            label = "Baterai Mesin",
-                            value = "${telemetry.batteryPct.toInt()}%",
-                            icon = Icons.Default.BatteryChargingFull,
-                            tint = if (telemetry.batteryPct < 20f) ErrorRed else SuccessGreen
-                        )
-                        TelemetryTile(
-                            label = "Kecepatan",
-                            value = String.format("%.2f m/s", telemetry.speedMps),
-                            icon = Icons.Default.Speed,
-                            tint = InfoBlue
-                        )
-                        TelemetryTile(
-                            label = "Mode Komunikasi",
-                            value = when (settings.connectionType) {
-                                com.example.padibot.model.ConnectionType.SIMULATOR -> "Simulator"
-                                com.example.padibot.model.ConnectionType.WIFI -> "WiFi"
-                                com.example.padibot.model.ConnectionType.BLUETOOTH -> "Bluetooth"
-                                com.example.padibot.model.ConnectionType.GSM_MQTT -> "GSM 4G"
-                            },
-                            icon = Icons.Default.Sensors,
-                            tint = Green700
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3. Active Field Selection Card
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().testTag("dashboard_active_field_card")
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Grass,
-                                contentDescription = null,
-                                tint = Green700,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Sawah Aktif",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        TextButton(
-                            onClick = { showFieldSelectorDialog = true },
-                            modifier = Modifier.testTag("button_switch_field")
-                        ) {
-                            Text("Ganti Sawah", fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-
-                    if (selectedField != null) {
-                        val field = selectedField!!
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = field.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Green900
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text(
-                                text = "📐 Luas: ${field.formatArea()}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "📍 ${field.boundary.size} Titik Batas",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            GpsStatusBadge(
+                                gpsStatus = telemetry.gpsStatus,
+                                accuracyM = telemetry.positionAccuracyM
                             )
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Integrated Google Maps Satellite & GIS Controls Container
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF1E2D1E))
+                        // Status badges row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            com.example.padibot.ui.components.FieldMapCanvas(
-                                boundary = field.boundary,
-                                heightDp = 160
-                            )
-
-                            // Top GPS Coordinate Chip
                             Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = Color.Black.copy(alpha = 0.65f),
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(8.dp)
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0x33FFFFFF)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(RoundedCornerShape(3.dp))
-                                            .background(SuccessGreen)
+                                    Icon(
+                                        imageVector = Icons.Default.BatteryChargingFull,
+                                        contentDescription = null,
+                                        tint = if (telemetry.batteryPct > 20) SuccessGreen else ErrorRed,
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "PadiBot: ${String.format("%.5f, %.5f", field.boundary.firstOrNull()?.lat ?: 0.0, field.boundary.firstOrNull()?.lon ?: 0.0)}",
+                                        text = "${telemetry.batteryPct.toInt()}%",
                                         color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
 
-                            // Right GIS Floating Tool Controls
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .padding(end = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0x33FFFFFF)
                             ) {
-                                listOf(
-                                    Icons.Default.Layers to "Layers",
-                                    Icons.Default.Agriculture to "Rover",
-                                    Icons.Default.Fullscreen to "Fit",
-                                    Icons.Default.GridOn to "Grid"
-                                ).forEach { (icon, desc) ->
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color.White.copy(alpha = 0.9f),
-                                        shadowElevation = 2.dp,
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clickable { }
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = icon,
-                                                contentDescription = desc,
-                                                tint = Gray800,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Speed,
+                                        contentDescription = null,
+                                        tint = InfoBlue,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "${String.format("%.2f", telemetry.speedMps)} m/s",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
 
-                            // Bottom Left Google Watermark
-                            Text(
-                                text = "Google",
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(start = 8.dp, bottom = 6.dp)
-                            )
+                            MissionStatusBadge(status = missionStatus)
                         }
-                    } else {
-                        Text(
-                            text = "Belum ada sawah dipilih",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Gray600
-                        )
                     }
                 }
             }
         }
 
-        // 4. Primary Action: MULAI MISI BARU
+        // Active Mission Card (if running/paused)
         item {
-            Button(
-                onClick = onNavigateToPlantingSettings,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .testTag("button_start_new_mission"),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Green700)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "🌾  MULAI MISI BARU",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        // 5. Secondary Quick Action Grid
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onNavigateToManualControl,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp)
-                        .testTag("button_manual_control"),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Games, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Kontrol Manual", fontWeight = FontWeight.SemiBold)
-                }
-
-                OutlinedButton(
-                    onClick = onNavigateToFields,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp)
-                        .testTag("button_view_fields"),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Map, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Peta Sawah", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-
-        // 6. Last Mission Card
-        if (lastMission != null) {
-            item {
+            if (activeMission != null && (missionStatus == MissionStatus.RUNNING || missionStatus == MissionStatus.PAUSED)) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigateToMissionDetail(lastMission.id) }
-                        .testTag("dashboard_last_mission_card")
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -396,126 +178,185 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Misi Terakhir",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            MissionStatusBadge(status = lastMission.status)
+                            Column {
+                                Text(
+                                    text = "Misi Sedang Berjalan",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = activeMission?.name ?: "Penanaman Padi",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                            Button(
+                                onClick = onNavigateToExecution,
+                                colors = ButtonDefaults.buttonColors(containerColor = Green700)
+                            ) {
+                                Text("Buka Monitor →", fontWeight = FontWeight.Bold)
+                            }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = lastMission.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        LinearProgressIndicator(
+                            progress = { telemetry.missionProgressPct / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp),
+                            color = Green700,
+                            trackColor = Green100,
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text(
-                                text = "Cakupan: ${String.format("%.1f%%", lastMission.actualCoveragePct.takeIf { it > 0 } ?: lastMission.estimatedCoveragePct)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Green700,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Jalur: ${lastMission.totalLanes} Jalur",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
                 }
             }
         }
 
-        // 7. Safety Emergency Stop
+        // Quick Primary Actions
         item {
-            EmergencyStopButton(
-                onEmergencyStop = {
-                    viewModel.triggerEmergencyStop()
-                }
+            Text(
+                text = "Aksi Cepat Operasional",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Gray900
             )
-        }
-    }
+            Spacer(modifier = Modifier.height(8.dp))
 
-    // Switch Field Dialog
-    if (showFieldSelectorDialog) {
-        AlertDialog(
-            onDismissRequest = { showFieldSelectorDialog = false },
-            title = { Text("Pilih Sawah Aktif", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    allFields.forEach { field ->
-                        Card(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ActionDashboardCard(
+                    title = "Petakan Sawah",
+                    subtitle = "Gambar / GPS",
+                    icon = Icons.Default.AddLocationAlt,
+                    color = Green700,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("action_map_field"),
+                    onClick = onNavigateToCreateField
+                )
+
+                ActionDashboardCard(
+                    title = "Rencana Tanam",
+                    subtitle = "Jalur Otomatis",
+                    icon = Icons.Default.AltRoute,
+                    color = Green800,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("action_plan_route"),
+                    onClick = onNavigateToPlantingSettings
+                )
+
+                ActionDashboardCard(
+                    title = "Manual RC",
+                    subtitle = "D-Pad Joystick",
+                    icon = Icons.Default.SportsEsports,
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("action_manual_rc"),
+                    onClick = onNavigateToManualControl
+                )
+            }
+        }
+
+        // Selected Field or Field Selector Card
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(imageVector = Icons.Default.Agriculture, contentDescription = null, tint = Green700)
+                            Text(
+                                text = "Petak Sawah Terpilih",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        TextButton(onClick = onNavigateToFields) {
+                            Text("Ganti Sawah (${allFields.size})")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (selectedField != null) {
+                        val field = selectedField!!
+                        Text(
+                            text = field.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Green800
+                        )
+                        Text(
+                            text = "📐 Luas: ${field.formatArea()} • ${field.boundary.size} Titik Batas Poligon",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Gray600
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        FieldMapCanvas(
+                            boundary = field.boundary,
+                            heightDp = 140
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = onNavigateToPlantingSettings,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Green700),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Grass, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Mulai Konfigurasi Penanaman Sawah Ini", fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    viewModel.selectField(field)
-                                    showFieldSelectorDialog = false
-                                },
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (selectedField?.id == field.id) Green100 else MaterialTheme.colorScheme.surfaceVariant
-                            )
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(text = field.name, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        text = "${field.formatArea()} • ${field.boundary.size} titik",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                                if (selectedField?.id == field.id) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = Green700
-                                    )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("🌱", fontSize = 36.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Belum Ada Petak Sawah Terpilih", fontWeight = FontWeight.SemiBold)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = onNavigateToCreateField,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Green700)
+                                ) {
+                                    Text("+ Buat Peta Sawah Pertama")
                                 }
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showFieldSelectorDialog = false }) {
-                    Text("Tutup")
-                }
             }
-        )
-    }
-}
+        }
 
-@Composable
-private fun TelemetryTile(
-    label: String,
-    value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    tint: Color
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Gray600
-        )
+        // Emergency Stop Button
+        item {
+            EmergencyStopButton(
+                onEmergencyStop = {
+                    viewModel.emergencyStop("Tombol Darurat Ditekan dari Dashboard")
+                }
+            )
+        }
     }
 }
