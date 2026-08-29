@@ -26,6 +26,7 @@ fun RoutePreviewScreen(
     onNavigateBack: () -> Unit
 ) {
     val selectedField by viewModel.selectedField.collectAsState()
+    val selectedPattern by viewModel.selectedPattern.collectAsState()
     val generatedRoute by viewModel.generatedRoute.collectAsState()
     val machineWidth by viewModel.machineWidth.collectAsState()
     val headlandWidth by viewModel.headlandWidth.collectAsState()
@@ -62,7 +63,7 @@ fun RoutePreviewScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Visualisasi Jalur Boustrophedon",
+                            text = "Visualisasi: ${selectedPattern.title}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

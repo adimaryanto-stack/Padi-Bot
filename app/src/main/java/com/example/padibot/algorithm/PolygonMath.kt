@@ -75,6 +75,38 @@ object PolygonMath {
     }
 
     /**
+     * Shrinks a polygon inward toward its centroid by the specified offset in meters.
+     */
+    fun shrinkPolygon(polygon: List<MetricPoint>, offset: Double): List<MetricPoint> {
+        if (polygon.size < 3 || offset <= 0.0) return polygon
+        val n = polygon.size
+        var cX = 0.0
+        var cY = 0.0
+        for (p in polygon) {
+            cX += p.x
+            cY += p.y
+        }
+        cX /= n
+        cY /= n
+
+        var maxDist = 0.0
+        for (p in polygon) {
+            val d = sqrt((p.x - cX).pow(2) + (p.y - cY).pow(2))
+            if (d > maxDist) maxDist = d
+        }
+
+        if (maxDist <= offset) return emptyList()
+        val scale = ((maxDist - offset) / maxDist).coerceAtLeast(0.01)
+
+        return polygon.map { p ->
+            MetricPoint(
+                x = cX + (p.x - cX) * scale,
+                y = cY + (p.y - cY) * scale
+            )
+        }
+    }
+
+    /**
      * Checks if a 2D line segment (p1 -> p2) intersects with horizontal line y = scanY.
      * Returns the x coordinate of intersection or null.
      */

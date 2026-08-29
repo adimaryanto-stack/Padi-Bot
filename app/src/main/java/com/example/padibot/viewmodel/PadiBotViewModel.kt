@@ -40,6 +40,9 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
     private val _laneOrientation = MutableStateFlow(0.0)
     val laneOrientation: StateFlow<Double> = _laneOrientation.asStateFlow()
 
+    private val _selectedPattern = MutableStateFlow(RoutePattern.BOUSTROPHEDON)
+    val selectedPattern: StateFlow<RoutePattern> = _selectedPattern.asStateFlow()
+
     private val _generatedRoute = MutableStateFlow<RouteGenerationResult?>(null)
     val generatedRoute: StateFlow<RouteGenerationResult?> = _generatedRoute.asStateFlow()
 
@@ -72,6 +75,11 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         recalculateRoute()
     }
 
+    fun setSelectedPattern(pattern: RoutePattern) {
+        _selectedPattern.value = pattern
+        recalculateRoute()
+    }
+
     fun setMachineWidth(width: Double) {
         _machineWidth.value = width.coerceIn(0.5, 5.0)
         recalculateRoute()
@@ -94,7 +102,8 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
                 boundary = field.boundary,
                 machineWidthM = _machineWidth.value,
                 headlandWidthM = _headlandWidth.value,
-                orientationDeg = _laneOrientation.value
+                orientationDeg = _laneOrientation.value,
+                pattern = _selectedPattern.value
             )
             _generatedRoute.value = result
         }
