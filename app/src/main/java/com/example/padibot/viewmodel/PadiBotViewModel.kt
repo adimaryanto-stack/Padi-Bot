@@ -17,9 +17,10 @@ import java.util.UUID
 
 class PadiBotViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val database = PadiBotDatabase.getDatabase(application)
+    val database = PadiBotDatabase.getDatabase(application)
     val repository = PadiBotRepository(database.fieldDao(), database.missionDao())
     val machineService = MachineService(viewModelScope)
+    val firebaseService = FirebaseRealtimeService()
 
     val allFields: StateFlow<List<Field>> = repository.allFields
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -67,6 +68,25 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
                     recalculateRoute()
                 }
             }
+        }
+
+        // Real-time telemetry sync to Firebase Cloud
+        viewModelScope.launch {
+            telemetry.collectLatest { t ->
+                firebaseService.pushTelemetry(t)
+            }
+        }
+
+        // Active mission sync to Firebase Cloud
+        viewModelScope.launch {
+            activeMission.collectLatest { m ->
+                firebaseService.syncActiveMission(m)
+            }
+        }
+
+        // Listen for remote cloud commands from Firebase
+        firebaseService.listenForRemoteCommands { dir, speed ->
+            sendManualCommand(dir, speed)
         }
     }
 
@@ -120,6 +140,7 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
                 perimeterM = perim
             )
             repository.saveField(newField)
+            firebaseService.syncField(newField)
             _selectedField.value = newField
             recalculateRoute()
             onSuccess(newField)
