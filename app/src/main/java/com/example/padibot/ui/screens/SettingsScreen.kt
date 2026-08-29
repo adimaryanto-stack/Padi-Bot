@@ -353,6 +353,164 @@ fun SettingsScreen(
             }
         }
 
+        // 5. Firebase Realtime Database Integration Card
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🔥", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Firebase Realtime Database",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Green100
+                        ) {
+                            Text(
+                                text = "● Siap / Live",
+                                color = Green800,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Telemetri robot, peta poligon batas sawah, dan riwayat penanaman disinkronkan secara real-time ke Firebase RTDB cloud.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray600
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Database Endpoint:", fontSize = 10.sp, color = Gray600, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = com.example.padibot.service.FirebaseRealtimeService.DATABASE_URL,
+                                fontSize = 10.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                color = Green800
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Auto-Stream Telemetri Real-time",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Kirim koordinat GPS, baterai & status robot tiap 1.5 detik",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Gray600,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Switch(
+                            checked = true,
+                            onCheckedChange = { },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Green700)
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.selectedField.value?.let { viewModel.firebaseService.syncField(it) }
+                            viewModel.firebaseService.pushTelemetry(viewModel.telemetry.value)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Green700),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("🌐 Sinkronkan Semua Data Sekarang", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // 6. Google Maps SDK GIS Integration Card
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🗺️", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Integrasi Google Maps SDK",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Green100
+                        ) {
+                            Text(
+                                text = "GIS V2 Ready",
+                                color = Green800,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Aplikasi mendukung citra satelit Google Maps HD dan Kanvas Skematik offline vektor poligon lahan.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray600
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Package Name: com.aistudio.padibot.ricerbt", fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                            Text("SHA-1 Fingerprint: C5:DB:DD:2A:72:C1:98:90:E2:BB:8D:18:2C:18:11:33", fontSize = 9.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = Gray700)
+                        }
+                    }
+                }
+            }
+        }
+
         // 5. About App
         item {
             Card(

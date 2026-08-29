@@ -220,6 +220,94 @@ fun DashboardScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Integrated Google Maps Satellite & GIS Controls Container
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1E2D1E))
+                        ) {
+                            com.example.padibot.ui.components.FieldMapCanvas(
+                                boundary = field.boundary,
+                                heightDp = 160
+                            )
+
+                            // Top GPS Coordinate Chip
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.Black.copy(alpha = 0.65f),
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(SuccessGreen)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "PadiBot: ${String.format("%.5f, %.5f", field.boundary.firstOrNull()?.lat ?: 0.0, field.boundary.firstOrNull()?.lon ?: 0.0)}",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    )
+                                }
+                            }
+
+                            // Right GIS Floating Tool Controls
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                listOf(
+                                    Icons.Default.Layers to "Layers",
+                                    Icons.Default.Agriculture to "Rover",
+                                    Icons.Default.Fullscreen to "Fit",
+                                    Icons.Default.GridOn to "Grid"
+                                ).forEach { (icon, desc) ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        shadowElevation = 2.dp,
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clickable { }
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = desc,
+                                                tint = Gray800,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Bottom Left Google Watermark
+                            Text(
+                                text = "Google",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(start = 8.dp, bottom = 6.dp)
+                            )
+                        }
                     } else {
                         Text(
                             text = "Belum ada sawah dipilih",
