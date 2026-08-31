@@ -10,6 +10,7 @@ data class Field(
     val boundary: List<GeoPoint>,
     val areaM2: Double,
     val perimeterM: Double,
+    val markers: List<FieldMarker> = emptyList(),
     val createdAt: Long = System.currentTimeMillis()
 ) {
     fun formatArea(): String {

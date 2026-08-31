@@ -7,5 +7,8 @@ data class MachineSettings(
     val bluetoothDeviceName: String = "PadiBot_ESP32",
     val bluetoothDeviceMac: String = "00:11:22:33:44:55",
     val mqttBroker: String = "broker.hivemq.com",
-    val mqttDeviceId: String = "padibot_01"
+    val mqttDeviceId: String = "padibot_01",
+    val firebaseDbUrl: String = "https://padibot-22de3-default-rtdb.asia-southeast1.firebasedatabase.app",
+    val firebaseAuthToken: String = "EI3vfJn9M89e1DpEDI4vDCqMBDAYEGN2kNxOJNMt",
+    val firebaseAutoSync: Boolean = true
 )

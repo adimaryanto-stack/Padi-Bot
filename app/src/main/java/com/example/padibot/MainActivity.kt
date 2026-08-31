@@ -1,17 +1,26 @@
 package com.example.padibot
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -43,12 +52,42 @@ class MainActivity : ComponentActivity() {
 
                 val isConnected by viewModel.isMachineConnected.collectAsState()
                 val settings by viewModel.machineSettings.collectAsState()
+                val telemetry by viewModel.telemetry.collectAsState()
                 val snackbarHostState = remember { SnackbarHostState() }
+
+                // Request POST_NOTIFICATIONS on Android 13+ (API 33+)
+                val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission()
+                ) { /* Result handled */ }
+
+                LaunchedEffect(Unit) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                }
 
                 // Listen for Emergency Stop notifications
                 LaunchedEffect(Unit) {
                     viewModel.emergencyStopTriggered.collectLatest { reason ->
                         snackbarHostState.showSnackbar("⚠️ EMERGENCY STOP: $reason")
+                    }
+                }
+
+                // Listen for Low Battery Alert Events
+                LaunchedEffect(Unit) {
+                    viewModel.batteryAlertEvents.collectLatest { alert ->
+                        val result = snackbarHostState.showSnackbar(
+                            message = "${alert.title}: ${alert.message}",
+                            actionLabel = "Lihat",
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            if (currentRoute != Screen.Dashboard.route) {
+                                navController.navigate(Screen.Dashboard.route)
+                            }
+                        }
                     }
                 }
 
@@ -88,7 +127,13 @@ class MainActivity : ComponentActivity() {
                             canNavigateBack = canNavigateBack,
                             onNavigateBack = { navController.navigateUp() },
                             connectionType = settings.connectionType,
-                            isConnected = isConnected
+                            isConnected = isConnected,
+                            batteryPct = telemetry.batteryPct,
+                            onBatteryClick = {
+                                if (currentRoute != Screen.Dashboard.route) {
+                                    navController.navigate(Screen.Dashboard.route)
+                                }
+                            }
                         )
                     },
                     bottomBar = {
@@ -96,12 +141,23 @@ class MainActivity : ComponentActivity() {
                             PadiBotBottomBar(
                                 currentRoute = currentRoute,
                                 onNavigateTo = { route ->
-                                    navController.navigate(route) {
-                                        popUpTo(Screen.Dashboard.route) {
-                                            saveState = true
+                                    if (route != currentRoute) {
+                                        if (route == Screen.Dashboard.route) {
+                                            navController.navigate(Screen.Dashboard.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    inclusive = false
+                                                }
+                                                launchSingleTop = true
+                                            }
+                                        } else {
+                                            navController.navigate(route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
                                     }
                                 }
                             )
@@ -131,6 +187,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigateToMissionDetail = { missionId ->
                                     navController.navigate(Screen.MissionDetail.createRoute(missionId))
+                                },
+                                onNavigateToSettings = {
+                                    navController.navigate(Screen.Settings.route)
                                 }
                             )
                         }
@@ -179,6 +238,14 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.MissionExecution.route) {
                             MissionExecutionScreen(
                                 viewModel = viewModel,
+                                onNavigateToManualControl = {
+                                    navController.navigate(Screen.ManualControl.route)
+                                },
+                                onNavigateToHistory = {
+                                    navController.navigate(Screen.MissionHistory.route) {
+                                        popUpTo(Screen.Dashboard.route)
+                                    }
+                                },
                                 onNavigateBackToHome = {
                                     navController.navigate(Screen.Dashboard.route) {
                                         popUpTo(Screen.Dashboard.route) { inclusive = true }

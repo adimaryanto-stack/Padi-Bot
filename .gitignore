@@ -41,5 +41,6 @@ arduino/*/build/
 arduino/*/*.hex
 arduino/*/*.elf
 
-# Scratch
+# Scratch & Temporary Exports
 scratch/
+kotlin_padibot/

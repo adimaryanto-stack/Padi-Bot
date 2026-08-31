@@ -35,7 +35,8 @@ fun DashboardScreen(
     onNavigateToMissionDetail: (String) -> Unit = {},
     onNavigateToCreateField: () -> Unit = {},
     onNavigateToFieldList: () -> Unit = onNavigateToFields,
-    onNavigateToExecution: () -> Unit = {}
+    onNavigateToExecution: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val telemetry by viewModel.telemetry.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
@@ -43,6 +44,41 @@ fun DashboardScreen(
     val activeMission by viewModel.activeMission.collectAsState()
     val missionStatus by viewModel.missionStatus.collectAsState()
     val allFields by viewModel.allFields.collectAsState()
+    val batteryLogs by viewModel.batteryLogs.collectAsState()
+    val firebaseSyncState by viewModel.firebaseSyncState.collectAsState()
+    val machineSettings by viewModel.machineSettings.collectAsState()
+
+    var showFirebaseDiagnostic by remember { mutableStateOf(false) }
+
+    val locationPermState = rememberLocationPermissionState { granted ->
+        if (granted) {
+            viewModel.startGpsTracking()
+        }
+    }
+
+    if (showFirebaseDiagnostic) {
+        FirebaseDiagnosticDialog(
+            syncState = firebaseSyncState,
+            currentDbUrl = machineSettings.firebaseDbUrl,
+            onDismiss = { showFirebaseDiagnostic = false },
+            onTestConnection = { testUrl, onResult ->
+                viewModel.testFirebaseConnection(testUrl, machineSettings.firebaseAuthToken, onResult)
+            },
+            onSaveAndSync = { newUrl ->
+                viewModel.updateMachineSettings(
+                    machineSettings.copy(
+                        firebaseDbUrl = newUrl,
+                        firebaseAutoSync = true
+                    )
+                )
+                viewModel.syncAllDataToFirebase()
+            },
+            onOpenSettings = {
+                showFirebaseDiagnostic = false
+                onNavigateToSettings()
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -51,6 +87,17 @@ fun DashboardScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Location Permission Banner if not fully granted
+        if (!locationPermState.isFullyGranted) {
+            item {
+                LocationPermissionCard(
+                    state = locationPermState,
+                    title = "Izin Lokasi Akurat (GPS/GNSS)",
+                    description = "Izinkan akses lokasi presisi tinggi untuk memantau posisi robot dan menyinkronkan koordinat sawah secara real-time."
+                )
+            }
+        }
+
         // Hero Card with Indonesian Rice Paddy Header & Quick Status
         item {
             Card(
@@ -158,10 +205,23 @@ fun DashboardScreen(
                             }
 
                             MissionStatusBadge(status = missionStatus)
+
+                            FirebaseStatusBadge(
+                                syncState = firebaseSyncState,
+                                onClick = { showFirebaseDiagnostic = true }
+                            )
                         }
                     }
                 }
             }
+        }
+
+        // Low Battery Visual Alert Banner (< 20%)
+        item {
+            BatteryAlertBanner(
+                telemetry = telemetry,
+                onPauseMission = { viewModel.pauseMission() }
+            )
         }
 
         // Active Mission Card (if running/paused)
@@ -212,6 +272,25 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+
+        // Robot Battery & Power Monitoring Card
+        item {
+            BatteryMonitorCard(
+                telemetry = telemetry,
+                missionStatus = missionStatus,
+                onViewHistory = onNavigateToHistory
+            )
+        }
+
+        // Time-series Battery History Chart (Stored in SQLite Database)
+        item {
+            BatteryHistoryChartCard(
+                batteryLogs = batteryLogs,
+                currentTelemetry = telemetry,
+                onRecordSample = { viewModel.recordBatterySample() },
+                onClearLogs = { viewModel.clearBatteryLogs() }
+            )
         }
 
         // Quick Primary Actions
@@ -301,7 +380,7 @@ fun DashboardScreen(
                             color = Green800
                         )
                         Text(
-                            text = "📐 Luas: ${field.formatArea()} • ${field.boundary.size} Titik Batas Poligon",
+                            text = "📐 Luas: ${field.formatArea()} • ${field.boundary.size} Batas" + if (field.markers.isNotEmpty()) " • ${field.markers.size} Penanda 🚩" else "",
                             style = MaterialTheme.typography.bodySmall,
                             color = Gray600
                         )
@@ -310,6 +389,7 @@ fun DashboardScreen(
 
                         FieldMapCanvas(
                             boundary = field.boundary,
+                            markers = field.markers,
                             heightDp = 140
                         )
 

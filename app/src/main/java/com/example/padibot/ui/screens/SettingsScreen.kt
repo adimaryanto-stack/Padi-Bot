@@ -1,5 +1,7 @@
 package com.example.padibot.ui.screens
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,8 +26,10 @@ import com.example.padibot.viewmodel.PadiBotViewModel
 fun SettingsScreen(
     viewModel: PadiBotViewModel
 ) {
+    val context = LocalContext.current
     val settings by viewModel.machineSettings.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
+
     var wifiIp by remember(settings) { mutableStateOf(settings.wifiIp) }
     var wifiPort by remember(settings) { mutableStateOf(settings.wifiPort.toString()) }
     var btName by remember(settings) { mutableStateOf(settings.bluetoothDeviceName) }
@@ -55,7 +60,7 @@ fun SettingsScreen(
                     Icon(imageVector = Icons.Default.Settings, contentDescription = null, tint = Green700, modifier = Modifier.size(32.dp))
                     Column {
                         Text("Pengaturan Konektivitas & Alat", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("ESP32 • RTK GPS • Simulator • IoT Cloud", style = MaterialTheme.typography.bodySmall, color = Gray600)
+                        Text("ESP32 • RTK GPS • Otomasi Robot Penanam Padi", style = MaterialTheme.typography.bodySmall, color = Gray600)
                     }
                 }
             }
@@ -211,6 +216,66 @@ fun SettingsScreen(
                             colors = ButtonDefaults.filledTonalButtonColors(containerColor = Green100, contentColor = Green800)
                         ) {
                             Text("Normal", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Test Local Battery Notification (< 20%) Card
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = null,
+                            tint = WarningOrange
+                        )
+                        Text(
+                            text = "Sistem Notifikasi & Alert Baterai (< 20%)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Sistem memantau telemetri daya secara real-time. Jika level baterai jatuh ≤ 20%, aplikasi otomatis memicu notifikasi push sistem Android, getaran perangkat, dan visual alert banner.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray700
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.triggerTestBatteryNotification(18f) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = WarningOrange)
+                        ) {
+                            Icon(Icons.Default.BatteryAlert, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Tes Alert 18%", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { viewModel.triggerTestBatteryNotification(8f) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
+                        ) {
+                            Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Tes Kritis 8%", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

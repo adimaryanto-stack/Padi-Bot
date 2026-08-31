@@ -19,6 +19,7 @@ import com.example.padibot.model.MissionStatus
 import com.example.padibot.theme.*
 import com.example.padibot.ui.components.*
 import com.example.padibot.viewmodel.PadiBotViewModel
+import kotlinx.coroutines.delay
 
 @Composable
 fun MissionExecutionScreen(
@@ -32,6 +33,19 @@ fun MissionExecutionScreen(
     val telemetry by viewModel.telemetry.collectAsState()
     val selectedField by viewModel.selectedField.collectAsState()
 
+    // Auto-navigate to Mission History upon 100% completion
+    var hasAutoNavigated by remember { mutableStateOf(false) }
+
+    val isMissionFinished = missionStatus == MissionStatus.COMPLETED || telemetry.missionProgressPct >= 100f
+
+    LaunchedEffect(isMissionFinished) {
+        if (isMissionFinished && !hasAutoNavigated) {
+            hasAutoNavigated = true
+            delay(1200) // Brief delay to show 100% completed badge
+            onNavigateToHistory()
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -39,6 +53,53 @@ fun MissionExecutionScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Completion Banner
+        if (isMissionFinished) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Green100),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("🎉", fontSize = 28.sp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Misi Tanam Selesai 100%!",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Green900
+                            )
+                            Text(
+                                text = "Mengalihkan ke halaman riwayat misi...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Green800
+                            )
+                        }
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Green700,
+                            strokeWidth = 2.5.dp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Low Battery Alert Banner (< 20%)
+        item {
+            BatteryAlertBanner(
+                telemetry = telemetry,
+                onPauseMission = { viewModel.pauseMission() }
+            )
+        }
+
         // Status and Progress Header
         item {
             Card(
@@ -121,25 +182,25 @@ fun MissionExecutionScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         TelemetryMetricCard(
-                            label = "Baterai",
+                            label = "Baterai (${telemetry.estimatedRemainingTimeString})",
                             value = "${telemetry.batteryPct.toInt()}%",
                             icon = Icons.Default.BatteryChargingFull,
                             color = if (telemetry.batteryPct > 20f) SuccessGreen else ErrorRed,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1.2f)
                         )
                         TelemetryMetricCard(
                             label = "Kecepatan",
                             value = "${String.format("%.2f", telemetry.speedMps)} m/s",
                             icon = Icons.Default.Speed,
                             color = InfoBlue,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(0.9f)
                         )
                         TelemetryMetricCard(
                             label = "Heading",
                             value = "${telemetry.headingDeg.toInt()}°",
                             icon = Icons.Default.Navigation,
                             color = WarningOrange,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(0.9f)
                         )
                     }
 
@@ -187,6 +248,7 @@ fun MissionExecutionScreen(
                     LiveMissionCanvas(
                         boundary = selectedField?.boundary ?: emptyList(),
                         waypoints = activeMission?.route ?: emptyList(),
+                        markers = selectedField?.markers ?: emptyList(),
                         telemetry = telemetry,
                         modifier = Modifier.height(280.dp)
                     )
@@ -204,51 +266,67 @@ fun MissionExecutionScreen(
 
         // Mission Control Buttons
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (missionStatus == MissionStatus.RUNNING) {
-                    Button(
-                        onClick = { viewModel.pauseMission() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp)
-                            .testTag("button_pause_mission"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = WarningOrange)
-                    ) {
-                        Icon(imageVector = Icons.Default.Pause, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Jeda Misi", fontWeight = FontWeight.Bold)
-                    }
-                } else if (missionStatus == MissionStatus.PAUSED || missionStatus == MissionStatus.READY) {
-                    Button(
-                        onClick = { viewModel.resumeMission() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp)
-                            .testTag("button_resume_mission"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Green700)
-                    ) {
-                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Lanjutkan", fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                OutlinedButton(
-                    onClick = onNavigateToManualControl,
+            if (isMissionFinished) {
+                Button(
+                    onClick = onNavigateToHistory,
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .height(50.dp)
-                        .testTag("button_switch_manual"),
-                    shape = RoundedCornerShape(12.dp)
+                        .testTag("button_view_history"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Green700)
                 ) {
-                    Icon(imageVector = Icons.Default.SportsEsports, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Manual D-Pad", fontWeight = FontWeight.Bold)
+                    Icon(imageVector = Icons.Default.History, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Buka Riwayat Misi Sekarang", fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (missionStatus == MissionStatus.RUNNING) {
+                        Button(
+                            onClick = { viewModel.pauseMission() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .testTag("button_pause_mission"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = WarningOrange)
+                        ) {
+                            Icon(imageVector = Icons.Default.Pause, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Jeda Misi", fontWeight = FontWeight.Bold)
+                        }
+                    } else if (missionStatus == MissionStatus.PAUSED || missionStatus == MissionStatus.READY) {
+                        Button(
+                            onClick = { viewModel.resumeMission() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .testTag("button_resume_mission"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Green700)
+                        ) {
+                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Lanjutkan", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onNavigateToManualControl,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp)
+                            .testTag("button_switch_manual"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.SportsEsports, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Manual D-Pad", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.padibot.algorithm.PolygonMath
+import com.example.padibot.model.FieldMarker
 import com.example.padibot.model.GeoPoint
 import com.example.padibot.model.Telemetry
 import com.example.padibot.theme.*
@@ -43,6 +44,7 @@ import kotlin.math.*
 fun LiveMissionCanvas(
     boundary: List<GeoPoint>,
     waypoints: List<GeoPoint>,
+    markers: List<FieldMarker> = emptyList(),
     telemetry: Telemetry? = null,
     modifier: Modifier = Modifier,
     enableZoomControls: Boolean = true,
@@ -54,8 +56,8 @@ fun LiveMissionCanvas(
     var panOffset by remember { mutableStateOf(Offset.Zero) }
 
     // Bounds calculation
-    val allPoints = remember(boundary, waypoints) {
-        (boundary + waypoints).ifEmpty {
+    val allPoints = remember(boundary, waypoints, markers) {
+        (boundary + waypoints + markers.map { it.point }).ifEmpty {
             listOf(GeoPoint(-6.923450, 107.610150), GeoPoint(-6.923750, 107.610550))
         }
     }
@@ -276,6 +278,30 @@ fun LiveMissionCanvas(
                         radius = (4f / scale).coerceIn(2f, 5f),
                         center = wpScreen.last()
                     )
+                }
+
+                // Draw Irrigation & Sawah Markers
+                if (markers.isNotEmpty()) {
+                    markers.forEach { marker ->
+                        val markerPos = toCanvas(marker.point)
+                        val mColor = Color(marker.type.colorHex)
+
+                        drawCircle(
+                            color = mColor.copy(alpha = 0.35f),
+                            radius = (14f / scale).coerceIn(7f, 20f),
+                            center = markerPos
+                        )
+                        drawCircle(
+                            color = Color.White,
+                            radius = (8f / scale).coerceIn(4f, 11f),
+                            center = markerPos
+                        )
+                        drawCircle(
+                            color = mColor,
+                            radius = (6.5f / scale).coerceIn(3.5f, 9f),
+                            center = markerPos
+                        )
+                    }
                 }
 
                 // Draw Active Machine Telemetry & Rover Position

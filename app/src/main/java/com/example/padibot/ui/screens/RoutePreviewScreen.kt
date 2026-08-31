@@ -30,6 +30,7 @@ fun RoutePreviewScreen(
     val generatedRoute by viewModel.generatedRoute.collectAsState()
     val selectedPattern by viewModel.selectedPattern.collectAsState()
     val machineWidth by viewModel.machineWidth.collectAsState()
+    val speedMps by viewModel.speedMps.collectAsState()
     val headlandWidth by viewModel.headlandWidth.collectAsState()
     val laneOrientation by viewModel.laneOrientation.collectAsState()
 
@@ -66,7 +67,7 @@ fun RoutePreviewScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Pola: ${selectedPattern.title} • Lebar: ${String.format("%.0f cm", machineWidth * 100)}",
+                        text = "Pola: ${selectedPattern.title} • Lebar: ${String.format("%.0f cm", machineWidth * 100)} • Kecepatan: ${String.format("%.2f m/s", speedMps)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Gray700
                     )
@@ -109,6 +110,7 @@ fun RoutePreviewScreen(
                     LiveMissionCanvas(
                         boundary = selectedField?.boundary ?: emptyList(),
                         waypoints = generatedRoute?.waypoints ?: emptyList(),
+                        markers = selectedField?.markers ?: emptyList(),
                         modifier = Modifier.height(280.dp)
                     )
 

@@ -9,9 +9,12 @@ import com.example.padibot.algorithm.RoutePlanner
 import com.example.padibot.data.local.PadiBotDatabase
 import com.example.padibot.data.repository.PadiBotRepository
 import com.example.padibot.model.*
+import com.example.padibot.service.BatteryAlertEvent
+import com.example.padibot.service.BatteryNotificationService
 import com.example.padibot.service.DeviceLocationService
 import com.example.padibot.service.DeviceLocationState
 import com.example.padibot.service.FirebaseRealtimeService
+import com.example.padibot.service.FirebaseSyncState
 import com.example.padibot.service.MachineService
 import com.example.padibot.service.ManualDirection
 import kotlinx.coroutines.flow.*
@@ -21,10 +24,13 @@ import java.util.UUID
 class PadiBotViewModel(application: Application) : AndroidViewModel(application) {
 
     val database = PadiBotDatabase.getDatabase(application)
-    val repository = PadiBotRepository(database.fieldDao(), database.missionDao())
+    val repository = PadiBotRepository(database.fieldDao(), database.missionDao(), database.batteryLogDao())
     val machineService = MachineService(viewModelScope)
     val firebaseService = FirebaseRealtimeService()
     val deviceLocationService = DeviceLocationService(application, viewModelScope)
+    val batteryNotificationService = BatteryNotificationService(application)
+
+    val batteryAlertEvents: SharedFlow<BatteryAlertEvent> = batteryNotificationService.batteryAlertEvents
 
     val deviceLocation: StateFlow<DeviceLocationState> = deviceLocationService.locationState
 
@@ -32,6 +38,9 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allMissions: StateFlow<List<Mission>> = repository.allMissions
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val batteryLogs: StateFlow<List<BatteryLog>> = repository.allBatteryLogs
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedField = MutableStateFlow<Field?>(null)
@@ -90,10 +99,38 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
     val isMachineConnected: StateFlow<Boolean> = machineService.isConnected
     val machineSettings: StateFlow<MachineSettings> = machineService.settings
     val emergencyStopTriggered = machineService.emergencyStopTriggered
+    val firebaseSyncState: StateFlow<FirebaseSyncState> = firebaseService.syncState
 
     init {
         viewModelScope.launch {
             repository.seedInitialDataIfNeeded()
+        }
+
+        viewModelScope.launch {
+            machineSettings.collectLatest { settings ->
+                firebaseService.updateConfig(
+                    url = settings.firebaseDbUrl,
+                    token = settings.firebaseAuthToken,
+                    autoSync = settings.firebaseAutoSync
+                )
+            }
+        }
+
+        // Auto test & sync on app launch using embedded hardcoded credentials
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(1000)
+            firebaseService.testConnection()
+            syncAllDataToFirebase()
+        }
+
+        // Periodic sync to Firebase (every 30 seconds if autoSync is enabled)
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(30_000L)
+                if (firebaseService.isAutoSyncEnabled) {
+                    syncAllDataToFirebase()
+                }
+            }
         }
 
         viewModelScope.launch {
@@ -106,14 +143,52 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         }
 
         viewModelScope.launch {
+            var lastRecordedTime = 0L
+            var lastRecordedPct = -1f
             telemetry.collectLatest { t ->
                 firebaseService.pushTelemetry(t)
+                batteryNotificationService.processBatteryTelemetry(t)
+                val now = System.currentTimeMillis()
+                // Record sample in Room database every 20 seconds or when battery percentage shifts
+                if (now - lastRecordedTime >= 20_000L || Math.abs(t.batteryPct - lastRecordedPct) >= 0.5f) {
+                    lastRecordedTime = now
+                    lastRecordedPct = t.batteryPct
+                    repository.saveBatteryLog(
+                        BatteryLog(
+                            timestamp = now,
+                            batteryPct = t.batteryPct,
+                            batteryVoltageV = t.batteryVoltageV,
+                            batteryCurrentA = t.batteryCurrentA,
+                            powerDrawWatts = t.powerDrawWatts,
+                            batteryTempC = t.batteryTempC,
+                            isCharging = t.isCharging,
+                            isPlantingActive = t.isPlantingActive
+                        )
+                    )
+                }
             }
         }
 
         viewModelScope.launch {
             activeMission.collectLatest { m ->
                 firebaseService.syncActiveMission(m)
+            }
+        }
+
+        viewModelScope.launch {
+            missionStatus.collectLatest { status ->
+                if (status == MissionStatus.COMPLETED) {
+                    val mission = activeMission.value
+                    if (mission != null) {
+                        repository.updateMissionStatus(mission.id, MissionStatus.COMPLETED, 100.0)
+                        repository.logEvent(
+                            mission.id,
+                            "COMPLETE",
+                            "Misi tanam selesai 100% dan berhasil diselesaikan",
+                            "SUCCESS"
+                        )
+                    }
+                }
             }
         }
 
@@ -159,6 +234,10 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         recalculateRoute()
     }
 
+    fun updateSpeedMps(mps: Double) {
+        setSpeedMps(mps)
+    }
+
     fun updateHeadlandWidth(headland: Double) {
         setHeadlandWidth(headland)
     }
@@ -195,7 +274,12 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun createField(name: String, points: List<GeoPoint>, onSuccess: (Field) -> Unit) {
+    fun createField(
+        name: String,
+        points: List<GeoPoint>,
+        markers: List<FieldMarker> = emptyList(),
+        onSuccess: (Field) -> Unit
+    ) {
         viewModelScope.launch {
             val (area, perim) = PolygonMath.calculateAreaAndPerimeter(points)
             val newField = Field(
@@ -203,7 +287,8 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
                 name = name.ifBlank { "Sawah Baru" },
                 boundary = points,
                 areaM2 = area,
-                perimeterM = perim
+                perimeterM = perim,
+                markers = markers
             )
             repository.saveField(newField)
             firebaseService.syncField(newField)
@@ -220,12 +305,14 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
                 _selectedField.value = allFields.value.firstOrNull { it.id != fieldId }
                 recalculateRoute()
             }
+            syncAllDataToFirebase()
         }
     }
 
     fun deleteMission(missionId: String) {
         viewModelScope.launch {
             repository.deleteMission(missionId)
+            syncAllDataToFirebase()
         }
     }
 
@@ -254,6 +341,13 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.saveMission(newMission)
             repository.logEvent(newMission.id, "READY", "Misi telah diapprove dan siap dieksekusi", "INFO")
+            firebaseService.syncAllData(
+                fields = allFields.value,
+                missions = allMissions.value + newMission,
+                telemetry = telemetry.value,
+                batteryLogs = batteryLogs.value,
+                settings = machineSettings.value
+            )
             onApproved(newMission)
         }
     }
@@ -386,5 +480,78 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearAllUserData() {
         clearAllData()
+    }
+
+    fun testFirebaseConnection(
+        customUrl: String? = null,
+        customToken: String? = null,
+        onResult: ((Boolean, String) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val res = firebaseService.testConnection(customUrl, customToken)
+            res.onSuccess { msg ->
+                onResult?.invoke(true, msg)
+            }.onFailure { err ->
+                onResult?.invoke(false, err.message ?: "Koneksi Firebase Gagal")
+            }
+        }
+    }
+
+    fun syncAllDataToFirebase(onResult: ((Boolean, String) -> Unit)? = null) {
+        viewModelScope.launch {
+            val fields = allFields.value
+            val missions = allMissions.value
+            val currentTel = telemetry.value
+            val bLogs = batteryLogs.value
+            val settings = machineSettings.value
+            val res = firebaseService.syncAllData(
+                fields = fields,
+                missions = missions,
+                telemetry = currentTel,
+                batteryLogs = bLogs,
+                settings = settings
+            )
+            res.onSuccess { msg ->
+                onResult?.invoke(true, msg)
+            }.onFailure { err ->
+                onResult?.invoke(false, err.message ?: "Gagal sinkronisasi data")
+            }
+        }
+    }
+
+    fun recordBatterySample() {
+        val t = telemetry.value
+        viewModelScope.launch {
+            repository.saveBatteryLog(
+                BatteryLog(
+                    timestamp = System.currentTimeMillis(),
+                    batteryPct = t.batteryPct,
+                    batteryVoltageV = t.batteryVoltageV,
+                    batteryCurrentA = t.batteryCurrentA,
+                    powerDrawWatts = t.powerDrawWatts,
+                    batteryTempC = t.batteryTempC,
+                    isCharging = t.isCharging,
+                    isPlantingActive = t.isPlantingActive
+                )
+            )
+        }
+    }
+
+    fun clearBatteryLogs() {
+        viewModelScope.launch {
+            repository.clearBatteryLogs()
+        }
+    }
+
+    fun triggerTestBatteryNotification(percentage: Float = 18f) {
+        batteryNotificationService.triggerTestAlert(percentage)
+    }
+
+    fun simulateLowBattery(percentage: Float = 15f) {
+        machineService.injectError("LOW_BATTERY")
+    }
+
+    fun restoreBattery() {
+        machineService.injectError("RESTORE")
     }
 }

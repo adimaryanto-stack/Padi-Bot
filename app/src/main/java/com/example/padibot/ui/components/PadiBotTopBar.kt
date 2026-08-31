@@ -27,7 +27,9 @@ fun PadiBotTopBar(
     canNavigateBack: Boolean,
     onNavigateBack: () -> Unit,
     connectionType: ConnectionType,
-    isConnected: Boolean
+    isConnected: Boolean,
+    batteryPct: Float? = null,
+    onBatteryClick: (() -> Unit)? = null
 ) {
     TopAppBar(
         title = {
@@ -53,6 +55,14 @@ fun PadiBotTopBar(
             }
         },
         actions = {
+            // Visual alert pill in TopBar when battery is low (<= 20%)
+            if (batteryPct != null && batteryPct <= 20f) {
+                LowBatteryTopBarPill(
+                    batteryPct = batteryPct,
+                    onClick = { onBatteryClick?.invoke() }
+                )
+            }
+
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = if (isConnected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,

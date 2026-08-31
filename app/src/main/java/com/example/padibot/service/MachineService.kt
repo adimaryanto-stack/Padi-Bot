@@ -175,12 +175,18 @@ class MachineService(private val scope: CoroutineScope) {
                 val current = _telemetry.value
                 val progress = ((currentWaypointIndex + 1).toFloat() / waypoints.size.toFloat()) * 100f
                 val newBattery = (current.batteryPct - 0.05f).coerceAtLeast(5f)
+                val voltage = 44.0f + (newBattery / 100f) * 8.0f
+                val currentAmps = 7.8f + (kotlin.random.Random.nextFloat() * 0.4f - 0.2f)
+                val tempC = (31.0f + (100f - newBattery) * 0.05f).coerceIn(28f, 42f)
 
                 _telemetry.value = current.copy(
                     latitude = target.latitude,
                     longitude = target.longitude,
                     speedMps = 0.8f,
                     batteryPct = newBattery,
+                    batteryVoltageV = voltage,
+                    batteryCurrentA = currentAmps,
+                    batteryTempC = tempC,
                     missionProgressPct = progress,
                     isPlantingActive = true,
                     lastUpdate = System.currentTimeMillis()

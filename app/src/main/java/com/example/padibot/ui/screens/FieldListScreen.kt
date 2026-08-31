@@ -117,7 +117,7 @@ fun FieldListScreen(
                                         color = if (isSelected) Green900 else Gray900
                                     )
                                     Text(
-                                        text = "📐 Luas: ${field.formatArea()} • ${field.boundary.size} Titik Batas",
+                                        text = "📐 Luas: ${field.formatArea()} • ${field.boundary.size} Batas" + if (field.markers.isNotEmpty()) " • ${field.markers.size} Penanda 🚩" else "",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Gray600
                                     )
@@ -151,6 +151,7 @@ fun FieldListScreen(
                             // Mini GIS Map Preview
                             FieldMapCanvas(
                                 boundary = field.boundary,
+                                markers = field.markers,
                                 heightDp = 120
                             )
 

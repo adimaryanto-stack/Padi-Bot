@@ -5,13 +5,14 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.example.padibot.model.BatteryLog
 import com.example.padibot.model.Field
 import com.example.padibot.model.Mission
 import com.example.padibot.model.MissionEvent
 
 @Database(
-    entities = [Field::class, Mission::class, MissionEvent::class],
-    version = 1,
+    entities = [Field::class, Mission::class, MissionEvent::class, BatteryLog::class],
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -19,6 +20,7 @@ abstract class PadiBotDatabase : RoomDatabase() {
 
     abstract fun fieldDao(): FieldDao
     abstract fun missionDao(): MissionDao
+    abstract fun batteryLogDao(): BatteryLogDao
 
     companion object {
         @Volatile

@@ -1,6 +1,7 @@
 package com.example.padibot.data.local
 
 import androidx.room.TypeConverter
+import com.example.padibot.model.FieldMarker
 import com.example.padibot.model.GeoPoint
 import com.example.padibot.model.MissionStatus
 import com.google.gson.Gson
@@ -18,6 +19,18 @@ class Converters {
     fun toGeoPointList(value: String?): List<GeoPoint> {
         if (value.isNullOrBlank()) return emptyList()
         val type = object : TypeToken<List<GeoPoint>>() {}.type
+        return gson.fromJson(value, type) ?: emptyList()
+    }
+
+    @TypeConverter
+    fun fromFieldMarkerList(value: List<FieldMarker>?): String {
+        return gson.toJson(value ?: emptyList<FieldMarker>())
+    }
+
+    @TypeConverter
+    fun toFieldMarkerList(value: String?): List<FieldMarker> {
+        if (value.isNullOrBlank()) return emptyList()
+        val type = object : TypeToken<List<FieldMarker>>() {}.type
         return gson.fromJson(value, type) ?: emptyList()
     }
 

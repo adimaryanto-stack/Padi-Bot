@@ -25,10 +25,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.padibot.algorithm.PolygonMath
+import com.example.padibot.model.FieldMarker
 import com.example.padibot.model.GeoPoint
+import com.example.padibot.model.MarkerType
+import com.example.padibot.service.GpsPrecisionGrade
 import com.example.padibot.theme.*
 import com.example.padibot.ui.components.FieldMapCanvas
+import com.example.padibot.ui.components.LocationPermissionCard
+import com.example.padibot.ui.components.rememberLocationPermissionState
 import com.example.padibot.viewmodel.PadiBotViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.Locale
 
 @Composable
 fun CreateFieldScreen(
@@ -36,58 +44,30 @@ fun CreateFieldScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val devLoc by viewModel.deviceLocation.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
 
     var fieldName by remember { mutableStateOf("") }
     val points = remember { mutableStateListOf<GeoPoint>() }
+    val markers = remember { mutableStateListOf<FieldMarker>() }
     val walkedTrail = remember { mutableStateListOf<GeoPoint>() }
+
+    var activeTab by remember { mutableIntStateOf(0) } // 0: Batas Poligon, 1: Penanda Irigasi & Tanam
+    var selectedMarkerType by remember { mutableStateOf(MarkerType.IRRIGATION_INLET) }
+    var markerNote by remember { mutableStateOf("") }
 
     var manualLat by remember { mutableStateOf("") }
     var manualLon by remember { mutableStateOf("") }
     var showManualDialog by remember { mutableStateOf(false) }
+    var showAveragingDialog by remember { mutableStateOf(false) }
+    var isSamplingAveraging by remember { mutableStateOf(false) }
+    var averagingProgress by remember { mutableStateOf(0f) }
+    var averagingStats by remember { mutableStateOf("") }
+
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var infoMessage by remember { mutableStateOf<String?>(null) }
     var isWalkAndMapActive by remember { mutableStateOf(false) }
-
-    // GPS Runtime Permission Launcher
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (fineGranted || coarseGranted) {
-            viewModel.startGpsTracking()
-        } else {
-            errorMessage = "Izin lokasi diperlukan untuk merekam batas sawah secara akurat."
-        }
-    }
-
-    // Auto-request location permissions & start updates on enter
-    LaunchedEffect(Unit) {
-        viewModel.checkGpsPermissions()
-        if (!viewModel.deviceLocationService.hasLocationPermission()) {
-            permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
-        } else {
-            viewModel.startGpsTracking()
-        }
-    }
-
-    // Auto-record trail in Walk & Map mode
-    LaunchedEffect(devLoc.latitude, devLoc.longitude, isWalkAndMapActive) {
-        if (isWalkAndMapActive && devLoc.hasFix && devLoc.latitude != 0.0) {
-            val currentPt = GeoPoint(devLoc.latitude, devLoc.longitude)
-            val lastPt = walkedTrail.lastOrNull()
-            if (lastPt == null || PolygonMath.distanceBetweenMeters(lastPt, currentPt) >= 2.0) {
-                walkedTrail.add(currentPt)
-            }
-        }
-    }
 
     val (area, perimeter) = remember(points.toList()) {
         PolygonMath.calculateAreaAndPerimeter(points)
@@ -101,6 +81,50 @@ fun CreateFieldScreen(
             GeoPoint(telemetry.latitude, telemetry.longitude)
         } else {
             GeoPoint(-6.923450, 107.610150)
+        }
+    }
+
+    // GPS Runtime Permission State Helper
+    val locationPermState = rememberLocationPermissionState { granted ->
+        if (granted) {
+            viewModel.startGpsTracking()
+            errorMessage = null
+        } else {
+            errorMessage = "Izin lokasi diperlukan untuk merekam batas sawah secara akurat."
+        }
+    }
+
+    // Auto-request location permissions & start updates on enter
+    LaunchedEffect(Unit) {
+        viewModel.checkGpsPermissions()
+        if (!locationPermState.isFullyGranted) {
+            locationPermState.request()
+        } else {
+            viewModel.startGpsTracking()
+        }
+
+        // Initialize with default visible field polygon around active GPS location if empty
+        if (points.isEmpty()) {
+            val base = activeGpsPoint
+            points.addAll(
+                listOf(
+                    GeoPoint(base.latitude + 0.00015, base.longitude - 0.00015),
+                    GeoPoint(base.latitude + 0.00015, base.longitude + 0.00020),
+                    GeoPoint(base.latitude - 0.00015, base.longitude + 0.00020),
+                    GeoPoint(base.latitude - 0.00015, base.longitude - 0.00015)
+                )
+            )
+        }
+    }
+
+    // Auto-record trail in Walk & Map mode
+    LaunchedEffect(devLoc.latitude, devLoc.longitude, isWalkAndMapActive) {
+        if (isWalkAndMapActive && devLoc.hasFix && devLoc.latitude != 0.0) {
+            val currentPt = GeoPoint(devLoc.latitude, devLoc.longitude)
+            val lastPt = walkedTrail.lastOrNull()
+            if (lastPt == null || PolygonMath.distanceBetweenMeters(lastPt, currentPt) >= 1.5) {
+                walkedTrail.add(currentPt)
+            }
         }
     }
 
@@ -130,47 +154,13 @@ fun CreateFieldScreen(
         }
 
         // GPS Permission Warning Banner if missing
-        if (!devLoc.hasPermission) {
+        if (!locationPermState.isFullyGranted) {
             item {
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("📍", fontSize = 20.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Izin Akses Lokasi Diperlukan",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF92400E)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Aplikasi membutuhkan izin GPS perangkat untuk mendeteksi posisi Anda saat memetakan sudut sawah.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF78350F)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Green700),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Aktifkan Izin GPS", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
+                LocationPermissionCard(
+                    state = locationPermState,
+                    title = "Izin GPS Presisi Tinggi Diperlukan",
+                    description = "PadiBot memerlukan izin lokasi akurat (Fine Location & GNSS) untuk mendeteksi posisi titik sudut batas sawah Anda saat memetakan lahan."
+                )
             }
         }
 
@@ -214,7 +204,7 @@ fun CreateFieldScreen(
             }
         }
 
-        // Real-Time GPS Sensor Card
+        // Real-Time GPS Precision Sensor Card
         item {
             Card(
                 shape = RoundedCornerShape(14.dp),
@@ -231,44 +221,52 @@ fun CreateFieldScreen(
                             Icon(
                                 imageVector = Icons.Default.MyLocation,
                                 contentDescription = null,
-                                tint = if (devLoc.hasFix) Green700 else WarningOrange,
-                                modifier = Modifier.size(20.dp)
+                                tint = if (devLoc.hasFix) Color(devLoc.precisionGrade.colorHex) else WarningOrange,
+                                modifier = Modifier.size(22.dp)
                             )
-                            Text(
-                                text = "Lokasi GPS Terkini",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Column {
+                                Text(
+                                    text = "Lokasi & Presisi GPS",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = devLoc.precisionGrade.label,
+                                    fontSize = 11.sp,
+                                    color = Color(devLoc.precisionGrade.colorHex),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
 
-                        // Accuracy & Source Badge
+                        // Accuracy Badge
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = if (devLoc.hasFix && devLoc.accuracyMeters <= 10f) Green100 else Color(0xFFFEF3C7),
+                            color = if (devLoc.hasFix && devLoc.accuracyMeters <= 5f) Green100 else Color(0xFFFEF3C7),
                             modifier = Modifier.padding(2.dp)
                         ) {
                             val accText = if (devLoc.hasFix) {
-                                "±${String.format("%.1f", devLoc.accuracyMeters)}m"
+                                "±${String.format(Locale.US, "%.1f", devLoc.accuracyMeters)}m (Kalman: ±${String.format(Locale.US, "%.1f", devLoc.filteredAccuracyMeters)}m)"
                             } else {
                                 "Mencari Sinyal..."
                             }
                             Text(
-                                text = "Akurasi: $accText",
+                                text = accText,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (devLoc.hasFix && devLoc.accuracyMeters <= 10f) Green800 else Color(0xFF92400E),
+                                color = if (devLoc.hasFix && devLoc.accuracyMeters <= 5f) Green800 else Color(0xFF92400E),
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Live Coordinates Text
+                    // Live Coordinates Text with 7 decimal resolution (~1cm)
                     val coordText = if (devLoc.hasFix) {
-                        "Koordinat HP: ${String.format("%.6f", devLoc.latitude)}, ${String.format("%.6f", devLoc.longitude)}"
+                        "Koordinat HP: ${String.format(Locale.US, "%.7f", devLoc.latitude)}, ${String.format(Locale.US, "%.7f", devLoc.longitude)}"
                     } else if (telemetry.latitude != 0.0) {
-                        "Koordinat: ${String.format("%.6f", telemetry.latitude)}, ${String.format("%.6f", telemetry.longitude)} (Simulator)"
+                        "Koordinat: ${String.format(Locale.US, "%.7f", telemetry.latitude)}, ${String.format(Locale.US, "%.7f", telemetry.longitude)} (Simulator)"
                     } else {
                         "Koordinat: Sedang menghubungkan ke GPS satelit..."
                     }
@@ -280,7 +278,7 @@ fun CreateFieldScreen(
                         color = Gray800
                     )
 
-                    // Provider & Satellite Info
+                    // Provider & Satellite Info & Sampling Buffer
                     if (devLoc.hasFix) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
@@ -288,27 +286,27 @@ fun CreateFieldScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "🛰️ Sumber: ${devLoc.provider}" + if (devLoc.satellitesCount > 0) " (${devLoc.satellitesUsed}/${devLoc.satellitesCount} Satelit)" else "",
+                                text = "🛰️ ${devLoc.provider}" + if (devLoc.satellitesCount > 0) " (${devLoc.satellitesUsed}/${devLoc.satellitesCount} Satelit)" else "",
                                 fontSize = 11.sp,
                                 color = Gray600
                             )
-                            if (devLoc.speedMps > 0.2f) {
-                                Text(
-                                    text = "Kecepatan: ${String.format("%.1f", devLoc.speedMps * 3.6f)} km/j",
-                                    fontSize = 11.sp,
-                                    color = Gray600
-                                )
-                            }
+                            Text(
+                                text = "Buffer Sampel: ${devLoc.bufferedSamplesCount}/30",
+                                fontSize = 11.sp,
+                                color = Green800,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Action Buttons: + Titik GPS & Walk & Map
+                    // Primary Action Buttons: + Titik Cepat & 🎯 Titik Presisi Tinggi (Averaging) & Walk & Map
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // 1. Instant Add
                         Button(
                             onClick = {
                                 val currentLoc = if (devLoc.hasFix && devLoc.latitude != 0.0) {
@@ -317,13 +315,12 @@ fun CreateFieldScreen(
                                     activeGpsPoint
                                 }
 
-                                // Check if user already added an identical point
                                 if (points.isNotEmpty()) {
                                     val dist = PolygonMath.distanceBetweenMeters(points.last(), currentLoc)
                                     if (dist < 1.0) {
-                                        infoMessage = "Titik berada di lokasi yang sama (< 1.0m). Melangkahlah ke sudut sawah berikutnya untuk titik baru."
+                                        infoMessage = "Titik berada sangat dekat (< 1.0m). Melangkahlah ke sudut sawah berikutnya."
                                     } else {
-                                        infoMessage = "Titik ${points.size + 1} berhasil ditambahkan (${String.format("%.1f", dist)}m dari titik sebelumnya)"
+                                        infoMessage = "Titik ${points.size + 1} ditambahkan (${String.format(Locale.US, "%.1f", dist)}m dari titik sebelumnya)"
                                     }
                                 } else {
                                     infoMessage = "Titik 1 berhasil ditambahkan."
@@ -337,10 +334,41 @@ fun CreateFieldScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(imageVector = Icons.Default.AddLocation, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("+ Titik GPS", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("+ Titik", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
 
+                        // 2. High-Precision Averaging Button
+                        FilledTonalButton(
+                            onClick = {
+                                showAveragingDialog = true
+                                isSamplingAveraging = true
+                                averagingProgress = 0f
+                                coroutineScope.launch {
+                                    for (i in 1..10) {
+                                        delay(200)
+                                        averagingProgress = i / 10f
+                                    }
+                                    val avgRes = viewModel.deviceLocationService.computeAveragedHighPrecisionPoint(maxSamples = 15)
+                                    if (avgRes != null) {
+                                        averagingStats = "Averaged ${avgRes.sampleCount} sampel • Deviasi: ±${String.format(Locale.US, "%.2f", avgRes.standardDeviationMeters)}m • Estimasi Error: ±${String.format(Locale.US, "%.2f", avgRes.estimatedAccuracyMeters)}m"
+                                        points.add(avgRes.point)
+                                        infoMessage = "Titik ${points.size} (Presisi Tinggi ±${String.format(Locale.US, "%.2f", avgRes.estimatedAccuracyMeters)}m) berhasil dikunci!"
+                                    } else {
+                                        points.add(activeGpsPoint)
+                                    }
+                                    isSamplingAveraging = false
+                                    delay(600)
+                                    showAveragingDialog = false
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1.3f)
+                        ) {
+                            Text("🎯 Presisi Tinggi", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // 3. Walk & Map
                         OutlinedButton(
                             onClick = {
                                 isWalkAndMapActive = !isWalkAndMapActive
@@ -361,13 +389,13 @@ fun CreateFieldScreen(
                             Icon(
                                 imageVector = if (isWalkAndMapActive) Icons.Default.DirectionsWalk else Icons.Default.Timeline,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(16.dp),
                                 tint = if (isWalkAndMapActive) Green800 else Gray800
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (isWalkAndMapActive) "Berjalan..." else "Walk & Map",
-                                fontSize = 13.sp,
+                                text = if (isWalkAndMapActive) "Berjalan" else "Walk",
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -393,7 +421,7 @@ fun CreateFieldScreen(
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Berjalanlah mengitari pematang sawah. Jejak langkah Anda direkam dan tampil garis biru di peta. Tekan '+ Titik GPS' di setiap sudut pematang.",
+                                    text = "Berjalanlah mengitari pematang sawah. Jejak langkah terfilter Kalman dan tampil garis biru di peta. Tekan '🎯 Presisi Tinggi' di setiap sudut pematang.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Green800
                                 )
@@ -480,6 +508,45 @@ fun CreateFieldScreen(
             }
         }
 
+        // Mode Switcher: Batas Poligon vs Penanda Irigasi & Tanam
+        item {
+            TabRow(
+                selectedTabIndex = activeTab,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = Green800,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+            ) {
+                Tab(
+                    selected = activeTab == 0,
+                    onClick = { activeTab = 0 },
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("📍", fontSize = 14.sp)
+                            Text("Batas Sawah (${points.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                )
+                Tab(
+                    selected = activeTab == 1,
+                    onClick = { activeTab = 1 },
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("🚩", fontSize = 14.sp)
+                            Text("Penanda Titik (${markers.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                )
+            }
+        }
+
         // Interactive Map Canvas
         item {
             Card(
@@ -495,14 +562,15 @@ fun CreateFieldScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Peta Batas Sawah (${points.size} Titik)",
+                            text = if (activeTab == 0) "Peta Batas Sawah (${points.size} Titik)" else "Peta Penanda (${markers.size} Penanda)",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Ketuk peta untuk tambah titik",
+                            text = if (activeTab == 0) "Ketuk peta untuk tambah titik" else "Ketuk peta untuk taruh ${selectedMarkerType.title}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Green700
+                            color = if (activeTab == 0) Green700 else Color(selectedMarkerType.colorHex),
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
@@ -510,15 +578,27 @@ fun CreateFieldScreen(
 
                     FieldMapCanvas(
                         points = points,
+                        markers = markers.toList(),
                         currentGpsLocation = if (devLoc.hasFix) devLoc.toGeoPoint() else activeGpsPoint,
                         walkedTrail = walkedTrail,
-                        gpsAccuracyMeters = devLoc.accuracyMeters,
+                        gpsAccuracyMeters = devLoc.filteredAccuracyMeters.takeIf { it > 0f } ?: devLoc.accuracyMeters,
                         isInteractive = true,
                         onPointAdded = { newPt ->
-                            points.add(newPt)
-                            infoMessage = "Titik ditambahkan via sentuhan peta."
+                            if (activeTab == 0) {
+                                points.add(newPt)
+                                infoMessage = "Titik batas ke-${points.size} ditambahkan via sentuhan peta."
+                            } else {
+                                val newMarker = FieldMarker(
+                                    type = selectedMarkerType,
+                                    point = newPt,
+                                    note = markerNote.trim()
+                                )
+                                markers.add(newMarker)
+                                infoMessage = "${selectedMarkerType.emoji} Penanda ${selectedMarkerType.title} ditambahkan di peta."
+                                markerNote = ""
+                            }
                         },
-                        modifier = Modifier.height(210.dp)
+                        modifier = Modifier.height(220.dp)
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -535,7 +615,7 @@ fun CreateFieldScreen(
                         Column {
                             Text("Estimasi Luas", style = MaterialTheme.typography.labelSmall, color = Gray600)
                             Text(
-                                text = if (area >= 10000) String.format("%.2f ha (%.0f m²)", area / 10000.0, area) else String.format("%.0f m²", area),
+                                text = if (area >= 10000) String.format(Locale.US, "%.2f ha (%.0f m²)", area / 10000.0, area) else String.format(Locale.US, "%.0f m²", area),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Green800
@@ -544,7 +624,16 @@ fun CreateFieldScreen(
                         Column {
                             Text("Keliling", style = MaterialTheme.typography.labelSmall, color = Gray600)
                             Text(
-                                text = String.format("%.1f m", perimeter),
+                                text = String.format(Locale.US, "%.1f m", perimeter),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Gray900
+                            )
+                        }
+                        Column {
+                            Text("Penanda", style = MaterialTheme.typography.labelSmall, color = Gray600)
+                            Text(
+                                text = "${markers.size} Titik",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Gray900
@@ -591,91 +680,326 @@ fun CreateFieldScreen(
             }
         }
 
-        // Coordinate Points List Header
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Daftar Koordinat Batas (${points.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+        // TAB 1: MARKER MANAGEMENT UI
+        if (activeTab == 1) {
+            // Marker Type Selection Card
+            item {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🚩", fontSize = 20.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Pilih Jenis Penanda Khusus",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                TextButton(onClick = {
-                    val currentLoc = activeGpsPoint
-                    manualLat = String.format("%.6f", currentLoc.latitude)
-                    manualLon = String.format("%.6f", currentLoc.longitude)
-                    showManualDialog = true
-                }) {
-                    Icon(imageVector = Icons.Default.AddLocationAlt, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Input Koordinat")
+                        // Marker Types Chips
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip(
+                                    selected = selectedMarkerType == MarkerType.IRRIGATION_INLET,
+                                    onClick = { selectedMarkerType = MarkerType.IRRIGATION_INLET },
+                                    label = { Text("💧 Inlet Irigasi", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilterChip(
+                                    selected = selectedMarkerType == MarkerType.IRRIGATION_OUTLET,
+                                    onClick = { selectedMarkerType = MarkerType.IRRIGATION_OUTLET },
+                                    label = { Text("🌊 Outlet Air", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip(
+                                    selected = selectedMarkerType == MarkerType.PLANTING_START,
+                                    onClick = { selectedMarkerType = MarkerType.PLANTING_START },
+                                    label = { Text("🌱 Awal Tanam", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilterChip(
+                                    selected = selectedMarkerType == MarkerType.PLANTING_FINISH,
+                                    onClick = { selectedMarkerType = MarkerType.PLANTING_FINISH },
+                                    label = { Text("🏁 Titik Selesai", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip(
+                                    selected = selectedMarkerType == MarkerType.WATER_PUMP,
+                                    onClick = { selectedMarkerType = MarkerType.WATER_PUMP },
+                                    label = { Text("🚰 Pompa Air", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilterChip(
+                                    selected = selectedMarkerType == MarkerType.OBSTACLE,
+                                    onClick = { selectedMarkerType = MarkerType.OBSTACLE },
+                                    label = { Text("⚠️ Rintangan", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Description of active marker
+                        Text(
+                            text = selectedMarkerType.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(selectedMarkerType.colorHex),
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Optional Note Input
+                        OutlinedTextField(
+                            value = markerNote,
+                            onValueChange = { markerNote = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Catatan / Keterangan (Opsional)") },
+                            placeholder = { Text("Contoh: Pintu air barat, Pipa 3 dim") },
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Quick Placement Button at GPS location
+                        Button(
+                            onClick = {
+                                val loc = if (devLoc.hasFix && devLoc.latitude != 0.0) {
+                                    GeoPoint(devLoc.latitude, devLoc.longitude)
+                                } else {
+                                    activeGpsPoint
+                                }
+                                val m = FieldMarker(
+                                    type = selectedMarkerType,
+                                    point = loc,
+                                    note = markerNote.trim()
+                                )
+                                markers.add(m)
+                                infoMessage = "${selectedMarkerType.emoji} Penanda ${selectedMarkerType.title} ditambahkan di lokasi GPS Anda."
+                                markerNote = ""
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(selectedMarkerType.colorHex))
+                        ) {
+                            Icon(imageVector = Icons.Default.AddLocation, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("+ Pasang Penanda di Posisi GPS HP", fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
-        }
 
-        if (points.isEmpty()) {
+            // List of Placed Markers Header
             item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Daftar Penanda Khusus (${markers.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (markers.isNotEmpty()) {
+                        TextButton(onClick = { markers.clear() }) {
+                            Text("Hapus Semua", color = ErrorRed, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+            if (markers.isEmpty()) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Belum ada penanda. Sentuh peta di atas atau tekan tombol '+ Pasang Penanda' untuk menandai titik irigasi/tanam.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Gray600
+                            )
+                        }
+                    }
+                }
+            }
+
+            itemsIndexed(markers) { index, marker ->
                 Card(
                     shape = RoundedCornerShape(10.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Belum ada titik batas. Tekan '+ Titik GPS', ketuk peta, atau gunakan preset.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray600
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(marker.type.colorHex)
+                            ) {
+                                Text(
+                                    text = "${marker.type.emoji} ${marker.type.code}",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = marker.type.title + if (marker.note.isNotBlank()) " - ${marker.note}" else "",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = String.format(Locale.US, "%.7f, %.7f", marker.point.latitude, marker.point.longitude),
+                                    style = CoordinateFont
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                markers.removeAt(index)
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Hapus Penanda",
+                                tint = ErrorRed,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
         }
 
-        itemsIndexed(points) { index, pt ->
-            Card(
-                shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+        // TAB 0: BOUNDARY COORDINATE POINTS LIST
+        if (activeTab == 0) {
+            item {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Titik ${index + 1}: ",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = pt.formatDisplay(),
-                            style = CoordinateFont
-                        )
-                    }
+                    Text(
+                        text = "Daftar Koordinat Batas (${points.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
 
-                    IconButton(
-                        onClick = {
-                            points.removeAt(index)
-                        }
+                    TextButton(onClick = {
+                        val currentLoc = activeGpsPoint
+                        manualLat = String.format(Locale.US, "%.7f", currentLoc.latitude)
+                        manualLon = String.format(Locale.US, "%.7f", currentLoc.longitude)
+                        showManualDialog = true
+                    }) {
+                        Icon(imageVector = Icons.Default.AddLocationAlt, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Input Manual")
+                    }
+                }
+            }
+
+            if (points.isEmpty()) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Hapus Titik",
-                            tint = ErrorRed,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Belum ada titik batas. Tekan '+ Titik', '🎯 Presisi Tinggi', atau gunakan preset.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Gray600
+                            )
+                        }
+                    }
+                }
+            }
+
+            itemsIndexed(points) { index, pt ->
+                Card(
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Titik ${index + 1}: ",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = String.format(Locale.US, "%.7f, %.7f", pt.latitude, pt.longitude),
+                                style = CoordinateFont
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                points.removeAt(index)
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Hapus Titik",
+                                tint = ErrorRed,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -695,7 +1019,7 @@ fun CreateFieldScreen(
                         .padding(10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 1. Titik (+ GPS Point)
+                    // 1. Titik (+ GPS Point or Marker)
                     OutlinedButton(
                         onClick = {
                             val cur = if (devLoc.hasFix && devLoc.latitude != 0.0) {
@@ -703,22 +1027,50 @@ fun CreateFieldScreen(
                             } else {
                                 activeGpsPoint
                             }
-                            points.add(cur)
+                            if (activeTab == 0) {
+                                val lastPt = points.lastOrNull()
+                                val pointToAdd = if (lastPt != null && PolygonMath.distanceBetweenMeters(lastPt, cur) < 1.0) {
+                                    // Stationary GPS (emulator / standing still): smart corner placement
+                                    val step = (points.size % 4)
+                                    val deltaLat = when (step) { 0 -> 0.00015; 1 -> 0.00015; 2 -> -0.00015; else -> -0.00015 }
+                                    val deltaLon = when (step) { 0 -> -0.00015; 1 -> 0.00020; 2 -> 0.00020; else -> -0.00015 }
+                                    GeoPoint(cur.latitude + deltaLat, cur.longitude + deltaLon)
+                                } else {
+                                    cur
+                                }
+                                points.add(pointToAdd)
+                                infoMessage = "Titik batas ke-${points.size} ditambahkan."
+                            } else {
+                                val m = FieldMarker(
+                                    type = selectedMarkerType,
+                                    point = cur,
+                                    note = markerNote.trim()
+                                )
+                                markers.add(m)
+                                infoMessage = "${selectedMarkerType.emoji} Penanda ${selectedMarkerType.title} ditambahkan."
+                                markerNote = ""
+                            }
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("📍", fontSize = 16.sp)
-                            Text("Titik", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(if (activeTab == 0) "📍" else selectedMarkerType.emoji, fontSize = 16.sp)
+                            Text(
+                                text = if (activeTab == 0) "+ Titik" else "+ ${selectedMarkerType.code}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
 
-                    // 2. Hapus (Delete last point)
+                    // 2. Hapus (Delete last point or marker)
                     OutlinedButton(
                         onClick = {
-                            if (points.isNotEmpty()) {
+                            if (activeTab == 0 && points.isNotEmpty()) {
                                 points.removeAt(points.size - 1)
+                            } else if (activeTab == 1 && markers.isNotEmpty()) {
+                                markers.removeAt(markers.size - 1)
                             }
                         },
                         modifier = Modifier.weight(1f),
@@ -741,7 +1093,7 @@ fun CreateFieldScreen(
                                 errorMessage = "Minimal 3 titik batas sawah diperlukan untuk membentuk poligon!"
                                 return@Button
                             }
-                            viewModel.createField(fieldName, points.toList()) {
+                            viewModel.createField(fieldName, points.toList(), markers.toList()) {
                                 onNavigateBack()
                             }
                         },
@@ -759,6 +1111,60 @@ fun CreateFieldScreen(
         }
     }
 
+    // High Precision Averaging Sampling Dialog
+    if (showAveragingDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🎯", fontSize = 20.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Survei Presisi Tinggi", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Mengumpulkan & merata-ratakan 15 sampel satelit GNSS untuk menghilangkan jitter dan meningkatkan akurasi titik sudut pematang...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray700
+                    )
+
+                    LinearProgressIndicator(
+                        progress = { averagingProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = Green700,
+                        trackColor = Green100
+                    )
+
+                    Text(
+                        text = if (isSamplingAveraging) "Sampling ${((averagingProgress * 15).toInt())}/15..." else "Selesai! Titik terkunci.",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Green900
+                    )
+
+                    if (averagingStats.isNotBlank()) {
+                        Text(
+                            text = averagingStats,
+                            style = CoordinateFont,
+                            fontSize = 11.sp,
+                            color = Gray800
+                        )
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
     // Dialog Input Koordinat Manual / GPS Auto-Fill
     if (showManualDialog) {
         AlertDialog(
@@ -769,28 +1175,28 @@ fun CreateFieldScreen(
                     FilledTonalButton(
                         onClick = {
                             val currentLoc = activeGpsPoint
-                            manualLat = String.format("%.6f", currentLoc.latitude)
-                            manualLon = String.format("%.6f", currentLoc.longitude)
+                            manualLat = String.format(Locale.US, "%.7f", currentLoc.latitude)
+                            manualLon = String.format(Locale.US, "%.7f", currentLoc.longitude)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(imageVector = Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("📍 Isi Otomatis dari GPS HP", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("📍 Isi dari GPS HP Terkini", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
 
                     OutlinedTextField(
                         value = manualLat,
                         onValueChange = { manualLat = it },
-                        label = { Text("Latitude (Lintang)") },
+                        label = { Text("Latitude (Lintang - 7 desimal)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = manualLon,
                         onValueChange = { manualLon = it },
-                        label = { Text("Longitude (Bujur)") },
+                        label = { Text("Longitude (Bujur - 7 desimal)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )

@@ -31,6 +31,7 @@ fun PlantingSettingsScreen(
 ) {
     val selectedField by viewModel.selectedField.collectAsState()
     val machineWidth by viewModel.machineWidth.collectAsState()
+    val speedMps by viewModel.speedMps.collectAsState()
     val headlandWidth by viewModel.headlandWidth.collectAsState()
     val laneOrientation by viewModel.laneOrientation.collectAsState()
     val selectedPattern by viewModel.selectedPattern.collectAsState()
@@ -177,6 +178,28 @@ fun PlantingSettingsScreen(
                             onValueChange = { viewModel.updateMachineWidth(it.toDouble()) },
                             valueRange = 0.6f..2.5f,
                             steps = 18,
+                            colors = SliderDefaults.colors(thumbColor = Green700, activeTrackColor = Green600)
+                        )
+                    }
+
+                    // Machine Speed Slider
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Kecepatan Mesin (Planting Speed):", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "${String.format("%.2f m/s", speedMps)} (~${String.format("%.1f km/h", speedMps * 3.6)})",
+                                fontWeight = FontWeight.Bold,
+                                color = Green700
+                            )
+                        }
+                        Slider(
+                            value = speedMps.toFloat(),
+                            onValueChange = { viewModel.updateSpeedMps(it.toDouble()) },
+                            valueRange = 0.2f..2.0f,
+                            steps = 17,
                             colors = SliderDefaults.colors(thumbColor = Green700, activeTrackColor = Green600)
                         )
                     }

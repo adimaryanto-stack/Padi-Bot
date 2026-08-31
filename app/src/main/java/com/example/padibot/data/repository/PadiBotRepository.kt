@@ -1,6 +1,7 @@
 package com.example.padibot.data.repository
 
 import com.example.padibot.algorithm.PolygonMath
+import com.example.padibot.data.local.BatteryLogDao
 import com.example.padibot.data.local.FieldDao
 import com.example.padibot.data.local.MissionDao
 import com.example.padibot.model.*
@@ -10,10 +11,28 @@ import java.util.UUID
 
 class PadiBotRepository(
     private val fieldDao: FieldDao,
-    private val missionDao: MissionDao
+    private val missionDao: MissionDao,
+    private val batteryLogDao: BatteryLogDao
 ) {
     val allFields: Flow<List<Field>> = fieldDao.getAllFields()
     val allMissions: Flow<List<Mission>> = missionDao.getAllMissions()
+    val allBatteryLogs: Flow<List<BatteryLog>> = batteryLogDao.getAllLogsAsc()
+
+    fun getRecentBatteryLogs(limit: Int = 60): Flow<List<BatteryLog>> {
+        return batteryLogDao.getRecentLogs(limit)
+    }
+
+    fun getBatteryLogsSince(timestamp: Long): Flow<List<BatteryLog>> {
+        return batteryLogDao.getLogsSince(timestamp)
+    }
+
+    suspend fun saveBatteryLog(log: BatteryLog) {
+        batteryLogDao.insertLog(log)
+    }
+
+    suspend fun clearBatteryLogs() {
+        batteryLogDao.deleteAllLogs()
+    }
 
     suspend fun saveField(field: Field) {
         fieldDao.insertField(field)
@@ -119,6 +138,39 @@ class PadiBotRepository(
             logEvent(sampleMission.id, "INIT", "Misi dibuat dan parameter diset", "INFO")
             logEvent(sampleMission.id, "START", "Misi tanam dimulai oleh operator", "INFO")
             logEvent(sampleMission.id, "FINISH", "Misi selesai dengan cakupan 96.0%", "INFO")
+        }
+
+        if (batteryLogDao.getCount() == 0) {
+            val now = System.currentTimeMillis()
+            val logs = mutableListOf<BatteryLog>()
+            // Generate a realistic 2-hour curve: starting at 100% and gradually discharging to 86% during active work
+            val sampleCount = 20
+            val intervalMs = 6 * 60 * 1000L // every 6 minutes
+            var currentPct = 100f
+            var currentVolts = 53.2f
+            for (i in (sampleCount - 1) downTo 0) {
+                val time = now - (i * intervalMs)
+                val isPlanting = i < 15
+                val currentA = if (isPlanting) 7.2f + (Math.sin(i.toDouble()).toFloat() * 1.2f) else 1.5f
+                val watts = currentVolts * currentA
+                val temp = 29.5f + (i * 0.25f)
+                logs.add(
+                    BatteryLog(
+                        timestamp = time,
+                        batteryPct = currentPct,
+                        batteryVoltageV = currentVolts,
+                        batteryCurrentA = currentA,
+                        powerDrawWatts = watts,
+                        batteryTempC = temp,
+                        isCharging = false,
+                        isPlantingActive = isPlanting
+                    )
+                )
+                // Drain ~0.7% every 6 mins when planting
+                currentPct = (currentPct - 0.72f).coerceAtLeast(10f)
+                currentVolts = (currentVolts - 0.08f).coerceAtLeast(46f)
+            }
+            batteryLogDao.insertLogs(logs)
         }
     }
 }
