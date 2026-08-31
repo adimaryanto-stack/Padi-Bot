@@ -106,6 +106,20 @@ class MachineService(private val scope: CoroutineScope) {
         _settings.value = newSettings
     }
 
+    fun updateTelemetryFromGps(lat: Double, lon: Double, accuracyM: Double = 1.5, speed: Float = 0f, heading: Float = 0f) {
+        if (_missionStatus.value != MissionStatus.RUNNING) {
+            _telemetry.value = _telemetry.value.copy(
+                latitude = lat,
+                longitude = lon,
+                positionAccuracyM = accuracyM,
+                accuracyMeters = accuracyM,
+                speedMps = speed,
+                headingDeg = if (heading != 0f) heading else _telemetry.value.headingDeg,
+                lastUpdate = System.currentTimeMillis()
+            )
+        }
+    }
+
     fun injectError(errorType: String) {
         when (errorType) {
             "GPS_LOSS" -> {

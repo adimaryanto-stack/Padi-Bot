@@ -30,6 +30,14 @@ object PolygonMath {
     }
 
     /**
+     * Calculates distance in meters between two GeoPoints.
+     */
+    fun distanceBetweenMeters(p1: GeoPoint, p2: GeoPoint): Double {
+        val (x, y) = latLonToMeters(p2.latitude, p2.longitude, p1.latitude, p1.longitude)
+        return sqrt(x * x + y * y)
+    }
+
+    /**
      * Calculates Geodesic Area (m²) and Perimeter (m) of a polygon using Shoelace formula in local projection.
      */
     fun calculateAreaAndPerimeter(points: List<GeoPoint>): Pair<Double, Double> {

@@ -9,6 +9,8 @@ import com.example.padibot.algorithm.RoutePlanner
 import com.example.padibot.data.local.PadiBotDatabase
 import com.example.padibot.data.repository.PadiBotRepository
 import com.example.padibot.model.*
+import com.example.padibot.service.DeviceLocationService
+import com.example.padibot.service.DeviceLocationState
 import com.example.padibot.service.FirebaseRealtimeService
 import com.example.padibot.service.MachineService
 import com.example.padibot.service.ManualDirection
@@ -22,6 +24,9 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
     val repository = PadiBotRepository(database.fieldDao(), database.missionDao())
     val machineService = MachineService(viewModelScope)
     val firebaseService = FirebaseRealtimeService()
+    val deviceLocationService = DeviceLocationService(application, viewModelScope)
+
+    val deviceLocation: StateFlow<DeviceLocationState> = deviceLocationService.locationState
 
     val allFields: StateFlow<List<Field>> = repository.allFields
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -109,6 +114,20 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             activeMission.collectLatest { m ->
                 firebaseService.syncActiveMission(m)
+            }
+        }
+
+        viewModelScope.launch {
+            deviceLocation.collectLatest { loc ->
+                if (loc.hasFix && loc.latitude != 0.0 && loc.longitude != 0.0) {
+                    machineService.updateTelemetryFromGps(
+                        lat = loc.latitude,
+                        lon = loc.longitude,
+                        accuracyM = loc.accuracyMeters.toDouble().coerceAtLeast(0.01),
+                        speed = loc.speedMps,
+                        heading = loc.bearingDeg
+                    )
+                }
             }
         }
 
@@ -324,12 +343,28 @@ class PadiBotViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun getCurrentGpsLocation(): GeoPoint {
+        val devLoc = deviceLocation.value
+        if (devLoc.hasFix && devLoc.latitude != 0.0 && devLoc.longitude != 0.0) {
+            return GeoPoint(devLoc.latitude, devLoc.longitude)
+        }
         val t = telemetry.value
         return if (t.latitude != 0.0 && t.longitude != 0.0) {
             GeoPoint(t.latitude, t.longitude)
         } else {
             GeoPoint(-6.923450, 107.610150)
         }
+    }
+
+    fun startGpsTracking() {
+        deviceLocationService.startLocationUpdates()
+    }
+
+    fun stopGpsTracking() {
+        deviceLocationService.stopLocationUpdates()
+    }
+
+    fun checkGpsPermissions() {
+        deviceLocationService.checkStatus()
     }
 
     fun getEventsForMission(missionId: String): Flow<List<MissionEvent>> {
